@@ -100,28 +100,44 @@ class TestRunPipeline:
         mock_reschedule.assert_called_once()
 
     @patch("app.orchestrator.orchestrator.process_email")
+    @patch("app.orchestrator.orchestrator.chat")
+    @patch("app.orchestrator.orchestrator.send_reply")
     @patch("app.orchestrator.orchestrator.log_event")
     @pytest.mark.asyncio
-    async def test_inquiry_flow(self, mock_log, mock_email):
-        """Should execute inquiry flow when intent is 'inquiry'."""
+    async def test_inquiry_flow(self, mock_log, mock_send_reply, mock_chat, mock_email):
+        """Should execute inquiry flow when intent is 'inquiry' — calls chat and sends reply."""
         mock_email.return_value = {"intent": "inquiry"}
+        mock_chat.return_value = {
+            "reply": "Đây là câu trả lời từ AI", "action": None}
+        mock_send_reply.return_value = {"status": "sent"}
 
-        result = await run_pipeline(MagicMock())
+        email_obj = MagicMock()
+        email_obj.body = "Khi nào có lịch trống?"
+        email_obj.sender = "user@example.com"
+        result = await run_pipeline(email_obj)
 
         assert result["type"] == "inquiry_flow"
-        # No calendar or notification calls for inquiry
-        assert "calendar" not in result["data"]
+        assert result["data"]["reply"] == "Đây là câu trả lời từ AI"
+        assert result["data"]["notification"]["status"] == "sent"
+        mock_chat.assert_called_once()
+        mock_send_reply.assert_called_once()
 
     @patch("app.orchestrator.orchestrator.process_email")
+    @patch("app.orchestrator.orchestrator.send_reply")
     @patch("app.orchestrator.orchestrator.log_event")
     @pytest.mark.asyncio
-    async def test_other_flow(self, mock_log, mock_email):
-        """Should execute summary flow when intent is 'other'."""
+    async def test_other_flow(self, mock_log, mock_send_reply, mock_email):
+        """Should execute other_flow when intent is 'other' — sends fixed fallback email."""
         mock_email.return_value = {"intent": "other"}
+        mock_send_reply.return_value = {"status": "sent"}
 
-        result = await run_pipeline(MagicMock())
+        email_obj = MagicMock()
+        email_obj.sender = "user@example.com"
+        result = await run_pipeline(email_obj)
 
-        assert result["type"] == "summary_flow"
+        assert result["type"] == "other_flow"
+        assert result["data"]["notification"]["status"] == "sent"
+        mock_send_reply.assert_called_once()
 
     @patch("app.orchestrator.orchestrator.process_email")
     @patch("app.orchestrator.orchestrator.process_schedule")

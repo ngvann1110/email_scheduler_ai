@@ -272,6 +272,40 @@ def _send(service, msg: MIMEMultipart) -> bool:
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
+def send_reply(to_email: str, subject: str, body_text: str) -> dict:
+    """
+    Gửi một email trả lời đơn giản (plain text) đến địa chỉ cho trước.
+
+    Args:
+        to_email   : địa chỉ email người nhận
+        subject    : tiêu đề email
+        body_text  : nội dung email (plain text)
+
+    Returns:
+        dict: {"status": "sent"} | {"status": "error", "message": str}
+    """
+    logger.info(
+        "[NotificationAgent] Gửi reply → %s | subject=%s", to_email, subject)
+
+    try:
+        service = _get_gmail_service()
+
+        msg = MIMEText(body_text, "plain", "utf-8")
+        msg["To"] = to_email
+        msg["Subject"] = subject
+
+        ok = _send(service, msg)
+        if ok:
+            logger.info("[NotificationAgent] ✓ Đã gửi reply → %s", to_email)
+            return {"status": "sent", "to": to_email}
+        else:
+            return {"status": "error", "message": "Gửi không thành công"}
+
+    except Exception as e:
+        logger.exception("[NotificationAgent] Lỗi send_reply: %s", e)
+        return {"status": "error", "message": str(e)}
+
+
 def send_notification(
     email_obj,
     email_result: dict,

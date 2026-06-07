@@ -1,7 +1,8 @@
 from app.agents.email_agent import process_email
 from app.agents.calendar_agent import process_schedule, process_cancel, process_reschedule
 from app.agents.conflict_agent import find_alternatives
-from app.agents.notification_agent import send_notification
+from app.agents.notification_agent import send_notification, send_reply
+from app.agents.chat_agent import chat
 from app.core.logger import log_event
 
 
@@ -54,10 +55,48 @@ async def run_pipeline(email) -> dict:
         return {"type": "reschedule_flow", "data": {"email": email_result, "calendar": calendar_result, "conflict": conflict_result, "notification": notification_result}}
 
     elif intent == "inquiry":
-        log_event(agent="orchestrator",
-                  status="inquiry_todo", payload=email_result)
-        return {"type": "inquiry_flow", "data": {"email": email_result}}
+        try:
+            reply_text = chat(
+                [{"role": "user", "content": getattr(email, "body", "")}]).get("reply", "")
+            noti_result = send_reply(
+                to_email=getattr(email, "sender", ""),
+                subject="Phản hồi tự động — Email Scheduler",
+                body_text=reply_text,
+            )
+            log_event(agent="notification_agent", status=noti_result.get(
+                "status"), payload=noti_result)
+            log_event(agent="orchestrator",
+                      status="inquiry_done", payload=email_result)
+            return {"type": "inquiry_flow", "data": {"email": email_result, "reply": reply_text, "notification": noti_result}}
+        except Exception as e:
+            log_event(agent="orchestrator",
+                      status="inquiry_error", payload={"error": str(e)})
+            return {"type": "inquiry_flow", "data": {"email": email_result, "notification": {"status": "error", "message": str(e)}}}
 
     else:
-        log_event(agent="orchestrator", status="other", payload=email_result)
-        return {"type": "summary_flow", "data": {"email": email_result}}
+        # "other" intent — gửi email phản hồi cố định, không gọi LLM
+        try:
+            fallback_body = (
+                "Xin chào,\n\n"
+                "Hệ thống Email Scheduler đã nhận được email của bạn "
+                "nhưng không thể xác định yêu cầu cụ thể.\n\n"
+                "Vui lòng gửi lại email với nội dung rõ ràng hơn "
+                "(ví dụ: đặt lịch họp, huỷ lịch, dời lịch, hoặc "
+                "hỏi về lịch trống).\n\n"
+                "Trân trọng,\n"
+                "Email Scheduler AI"
+            )
+            noti_result = send_reply(
+                to_email=getattr(email, "sender", ""),
+                subject="Phản hồi tự động — Email Scheduler",
+                body_text=fallback_body,
+            )
+            log_event(agent="notification_agent", status=noti_result.get(
+                "status"), payload=noti_result)
+            log_event(agent="orchestrator",
+                      status="other_replied", payload=email_result)
+            return {"type": "other_flow", "data": {"email": email_result, "notification": noti_result}}
+        except Exception as e:
+            log_event(agent="orchestrator",
+                      status="other_error", payload={"error": str(e)})
+            return {"type": "other_flow", "data": {"email": email_result, "notification": {"status": "error", "message": str(e)}}}
