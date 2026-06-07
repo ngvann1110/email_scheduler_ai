@@ -1,0 +1,19 @@
+fastapi
+uvicorn
+pydantic
+python-dotenv
+email-validator
+openai
+pydantic[email]
+google-genai
+google-auth-oauthlib
+google-auth-httplib2
+google-api-python-client
+python-multipart
+
+# ── Test dependencies 
+pytest>=7.0
+pytest-asyncio>=0.21
+pytest-cov>=4.0
+httpx>=0.24
+playwright>=1.40

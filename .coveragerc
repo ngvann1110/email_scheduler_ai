@@ -1,0 +1,30 @@
+[run]
+source = app
+omit =
+    # Omit test files themselves
+    */tests/*
+    # Omit the existing test script (it's not part of the app)
+    app/test.py
+    # Omit config file (empty)
+    app/core/config.py
+
+[report]
+# Target coverage threshold
+fail_under = 80
+
+# Show missing line numbers
+show_missing = true
+
+# Skip files with 0% coverage from the report
+skip_covered = false
+
+# Regexes for lines to exclude from coverage
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    if __name__ == .__main__.:
+    raise NotImplementedError
+    pass
+
+[html]
+directory = coverage_html

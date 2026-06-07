@@ -1,0 +1,1372 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Scheduler — Chat</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800&family=Quicksand:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --bg: #dbeafe;
+            --surface: #eff6ff;
+            --surface2: #ffffff;
+            --border: #bfdbfe;
+            --accent: #3b82f6;
+            --accent2: #60a5fa;
+            --accent3: #93c5fd;
+            --text: #1e3a5f;
+            --muted: #6b9ab8;
+            --user-bg: #3b82f6;
+            --bot-bg: #ffffff;
+            --success: #34d399;
+            --pink: #f9a8d4;
+            --yellow: #fde68a;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Nunito', sans-serif;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            background-image:
+                radial-gradient(circle at 20% 20%, rgba(147, 197, 253, 0.4) 0%, transparent 50%),
+                radial-gradient(circle at 80% 80%, rgba(196, 181, 253, 0.3) 0%, transparent 50%),
+                radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.2) 0%, transparent 70%);
+        }
+
+        /* Floating bubbles bg */
+        body::before {
+            content: '';
+            position: fixed;
+            top: -100px;
+            right: -100px;
+            width: 300px;
+            height: 300px;
+            background: radial-gradient(circle, rgba(147, 197, 253, 0.5), transparent 70%);
+            border-radius: 50%;
+            pointer-events: none;
+        }
+
+        body::after {
+            content: '';
+            position: fixed;
+            bottom: -80px;
+            left: -80px;
+            width: 250px;
+            height: 250px;
+            background: radial-gradient(circle, rgba(196, 181, 253, 0.4), transparent 70%);
+            border-radius: 50%;
+            pointer-events: none;
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 16px 24px;
+            border-bottom: 2px solid var(--border);
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(12px);
+            position: relative;
+            z-index: 10;
+            box-shadow: 0 2px 20px rgba(59, 130, 246, 0.1);
+        }
+
+        .logo {
+            width: 44px;
+            height: 44px;
+            background: linear-gradient(135deg, #3b82f6, #60a5fa);
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            box-shadow: 0 4px 15px rgba(59, 130, 246, 0.35);
+        }
+
+        .header-text h1 {
+            font-family: 'Quicksand', sans-serif;
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--accent);
+            letter-spacing: -0.2px;
+        }
+
+        .header-text p {
+            font-size: 12px;
+            color: var(--muted);
+            margin-top: 1px;
+            font-weight: 500;
+        }
+
+        .status {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            font-size: 12px;
+            color: var(--success);
+            font-weight: 600;
+            background: rgba(52, 211, 153, 0.1);
+            padding: 5px 12px;
+            border-radius: 20px;
+            border: 1px solid rgba(52, 211, 153, 0.3);
+        }
+
+        /* ── Tab Navigation ─────────────────────────────────────────────── */
+        .tab-nav {
+            display: flex;
+            gap: 4px;
+            margin-left: 20px;
+            background: rgba(255, 255, 255, 0.5);
+            padding: 3px;
+            border-radius: 14px;
+            border: 1px solid var(--border);
+        }
+
+        .tab-btn {
+            padding: 7px 16px;
+            border: none;
+            border-radius: 11px;
+            font-family: 'Nunito', sans-serif;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: transparent;
+            color: var(--muted);
+        }
+
+        .tab-btn:hover {
+            color: var(--accent);
+            background: rgba(59, 130, 246, 0.08);
+        }
+
+        .tab-btn.active {
+            background: white;
+            color: var(--accent);
+            box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
+        }
+
+        .status-dot {
+            width: 7px;
+            height: 7px;
+            background: var(--success);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+
+            50% {
+                opacity: 0.5;
+                transform: scale(1.4);
+            }
+        }
+
+        /* Chat area */
+        .chat-area {
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px 28px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            scroll-behavior: smooth;
+        }
+
+        .chat-area::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .chat-area::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .chat-area::-webkit-scrollbar-thumb {
+            background: var(--accent3);
+            border-radius: 4px;
+        }
+
+        /* Welcome */
+        .welcome {
+            text-align: center;
+            padding: 32px 20px;
+            animation: fadeUp 0.6s ease;
+        }
+
+        .welcome-icon {
+            font-size: 56px;
+            margin-bottom: 16px;
+            display: block;
+            animation: float 3s ease-in-out infinite;
+        }
+
+        @keyframes float {
+
+            0%,
+            100% {
+                transform: translateY(0);
+            }
+
+            50% {
+                transform: translateY(-8px);
+            }
+        }
+
+        .welcome h2 {
+            font-family: 'Quicksand', sans-serif;
+            font-size: 26px;
+            font-weight: 800;
+            margin-bottom: 10px;
+            color: var(--accent);
+        }
+
+        .welcome p {
+            color: var(--muted);
+            font-size: 14px;
+            line-height: 1.8;
+            max-width: 360px;
+            margin: 0 auto 24px;
+            font-weight: 500;
+        }
+
+        .quick-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        .quick-btn {
+            background: white;
+            border: 2px solid var(--border);
+            color: var(--accent);
+            padding: 9px 18px;
+            border-radius: 24px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: 'Nunito', sans-serif;
+            font-weight: 600;
+            box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
+        }
+
+        .quick-btn:hover {
+            border-color: var(--accent);
+            background: var(--accent);
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(59, 130, 246, 0.25);
+        }
+
+        /* Messages */
+        .message {
+            display: flex;
+            gap: 10px;
+            max-width: 82%;
+            animation: fadeUp 0.3s ease;
+        }
+
+        @keyframes fadeUp {
+            from {
+                opacity: 0;
+                transform: translateY(12px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.user {
+            align-self: flex-end;
+            flex-direction: row-reverse;
+        }
+
+        .avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            flex-shrink: 0;
+            margin-top: 2px;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .message.bot .avatar {
+            background: linear-gradient(135deg, #60a5fa, #93c5fd);
+        }
+
+        .message.user .avatar {
+            background: linear-gradient(135deg, #3b82f6, #60a5fa);
+        }
+
+        .bubble {
+            padding: 12px 16px;
+            border-radius: 18px;
+            font-size: 14px;
+            line-height: 1.7;
+            white-space: pre-wrap;
+            word-break: break-word;
+            font-weight: 500;
+        }
+
+        .message.bot .bubble {
+            background: white;
+            border: 2px solid var(--border);
+            border-top-left-radius: 4px;
+            box-shadow: 0 3px 12px rgba(59, 130, 246, 0.08);
+            color: var(--text);
+        }
+
+        .message.user .bubble {
+            background: linear-gradient(135deg, #3b82f6, #60a5fa);
+            border-top-right-radius: 4px;
+            color: white;
+            box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
+        }
+
+        /* Action card */
+        .action-card {
+            background: linear-gradient(135deg, #eff6ff, #dbeafe);
+            border: 2px solid var(--border);
+            border-radius: 16px;
+            padding: 14px 16px;
+            margin-top: 10px;
+            font-size: 13px;
+            box-shadow: 0 3px 12px rgba(59, 130, 246, 0.1);
+        }
+
+        .action-card .label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1.2px;
+            color: var(--accent);
+            font-weight: 800;
+            margin-bottom: 10px;
+        }
+
+        .action-card .row {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 5px;
+            align-items: flex-start;
+        }
+
+        .action-card .row .icon {
+            width: 18px;
+            flex-shrink: 0;
+        }
+
+        .action-card .row .val {
+            color: var(--text);
+            font-weight: 600;
+        }
+
+        /* Typing */
+        .typing .bubble {
+            display: flex;
+            gap: 5px;
+            align-items: center;
+            padding: 14px 18px;
+        }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            background: var(--accent3);
+            border-radius: 50%;
+            animation: bounce 1.2s infinite;
+        }
+
+        .dot:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .dot:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+        @keyframes bounce {
+
+            0%,
+            60%,
+            100% {
+                transform: translateY(0);
+            }
+
+            30% {
+                transform: translateY(-7px);
+            }
+        }
+
+        /* Input area */
+        .input-area {
+            padding: 16px 24px 20px;
+            border-top: 2px solid var(--border);
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+        }
+
+        .input-wrap {
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+            background: white;
+            border: 2px solid var(--border);
+            border-radius: 20px;
+            padding: 10px 14px;
+            transition: all 0.2s;
+            box-shadow: 0 2px 12px rgba(59, 130, 246, 0.08);
+        }
+
+        .input-wrap:focus-within {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.12);
+        }
+
+        textarea {
+            flex: 1;
+            background: transparent;
+            border: none;
+            outline: none;
+            color: var(--text);
+            font-family: 'Nunito', sans-serif;
+            font-size: 14px;
+            resize: none;
+            max-height: 120px;
+            line-height: 1.5;
+            font-weight: 500;
+        }
+
+        textarea::placeholder {
+            color: var(--muted);
+        }
+
+        .send-btn {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #3b82f6, #60a5fa);
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            flex-shrink: 0;
+            box-shadow: 0 3px 10px rgba(59, 130, 246, 0.3);
+        }
+
+        .send-btn:hover {
+            transform: scale(1.08);
+            box-shadow: 0 6px 18px rgba(59, 130, 246, 0.4);
+        }
+
+        .send-btn:active {
+            transform: scale(0.96);
+        }
+
+        .send-btn svg {
+            width: 18px;
+            height: 18px;
+            fill: white;
+        }
+
+        .hint {
+            text-align: center;
+            font-size: 11px;
+            color: var(--muted);
+            margin-top: 9px;
+            font-weight: 600;
+        }
+
+        /* Decorative dots */
+        .deco {
+            position: fixed;
+            border-radius: 50%;
+            opacity: 0.15;
+            pointer-events: none;
+        }
+
+        .deco-1 {
+            width: 120px;
+            height: 120px;
+            background: #3b82f6;
+            top: 15%;
+            right: 5%;
+            animation: float2 6s ease-in-out infinite;
+        }
+
+        .deco-2 {
+            width: 80px;
+            height: 80px;
+            background: #a78bfa;
+            bottom: 25%;
+            right: 8%;
+            animation: float2 8s ease-in-out infinite reverse;
+        }
+
+        .deco-3 {
+            width: 60px;
+            height: 60px;
+            background: #34d399;
+            top: 40%;
+            left: 3%;
+            animation: float2 7s ease-in-out infinite;
+        }
+
+        @keyframes float2 {
+
+            0%,
+            100% {
+                transform: translateY(0) scale(1);
+            }
+
+            50% {
+                transform: translateY(-20px) scale(1.05);
+            }
+        }
+
+        /* ── Dashboard ──────────────────────────────────────────────────── */
+        .dashboard {
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px 28px;
+            display: none;
+            flex-direction: column;
+            gap: 20px;
+            scroll-behavior: smooth;
+        }
+
+        .dashboard::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .dashboard::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .dashboard::-webkit-scrollbar-thumb {
+            background: var(--accent3);
+            border-radius: 4px;
+        }
+
+        .dashboard.visible {
+            display: flex;
+        }
+
+        /* Stats grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 14px;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+            border: 2px solid var(--border);
+            border-radius: 16px;
+            padding: 18px 16px;
+            text-align: center;
+            transition: all 0.2s;
+            box-shadow: 0 3px 12px rgba(59, 130, 246, 0.08);
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(59, 130, 246, 0.15);
+        }
+
+        .stat-icon {
+            font-size: 28px;
+            margin-bottom: 6px;
+            display: block;
+        }
+
+        .stat-value {
+            font-family: 'Quicksand', sans-serif;
+            font-size: 28px;
+            font-weight: 800;
+            color: var(--accent);
+            line-height: 1.2;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: var(--muted);
+            font-weight: 600;
+            margin-top: 4px;
+        }
+
+        .stat-card.success .stat-value {
+            color: #16a34a;
+        }
+
+        .stat-card.warning .stat-value {
+            color: #d97706;
+        }
+
+        .stat-card.error .stat-value {
+            color: #dc2626;
+        }
+
+        /* Section cards */
+        .section-card {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+            border: 2px solid var(--border);
+            border-radius: 16px;
+            padding: 18px 20px;
+            box-shadow: 0 3px 12px rgba(59, 130, 246, 0.08);
+        }
+
+        .section-card h3 {
+            font-family: 'Quicksand', sans-serif;
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--accent);
+            margin-bottom: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Tables */
+        .dashboard-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        .dashboard-table th {
+            text-align: left;
+            padding: 10px 12px;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: var(--muted);
+            font-weight: 800;
+            border-bottom: 2px solid var(--border);
+        }
+
+        .dashboard-table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--border);
+            color: var(--text);
+            font-weight: 500;
+        }
+
+        .dashboard-table tr:hover td {
+            background: rgba(59, 130, 246, 0.04);
+        }
+
+        .dashboard-table .status-badge {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        .status-badge.ok {
+            background: rgba(52, 211, 153, 0.15);
+            color: #16a34a;
+        }
+
+        .status-badge.error {
+            background: rgba(220, 38, 38, 0.1);
+            color: #dc2626;
+        }
+
+        .status-badge.warning {
+            background: rgba(217, 119, 6, 0.1);
+            color: #d97706;
+        }
+
+        .status-badge.spam {
+            background: rgba(168, 85, 247, 0.1);
+            color: #9333ea;
+        }
+
+        .status-badge.created {
+            background: rgba(52, 211, 153, 0.15);
+            color: #16a34a;
+        }
+
+        .status-badge.conflict {
+            background: rgba(245, 158, 11, 0.1);
+            color: #d97706;
+        }
+
+        .status-badge.cancelled {
+            background: rgba(239, 68, 68, 0.1);
+            color: #dc2626;
+        }
+
+        .status-badge.rescheduled {
+            background: rgba(59, 130, 246, 0.1);
+            color: #3b82f6;
+        }
+
+        .status-badge.sent {
+            background: rgba(52, 211, 153, 0.15);
+            color: #16a34a;
+        }
+
+        .status-badge.processed {
+            background: rgba(59, 130, 246, 0.1);
+            color: #3b82f6;
+        }
+
+        .status-badge.received {
+            background: rgba(99, 102, 241, 0.1);
+            color: #6366f1;
+        }
+
+        .status-badge.default {
+            background: rgba(156, 163, 175, 0.15);
+            color: #6b7280;
+        }
+
+        /* Filter bar */
+        .filter-bar {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 14px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .filter-bar select,
+        .filter-bar input {
+            padding: 7px 12px;
+            border: 2px solid var(--border);
+            border-radius: 10px;
+            font-family: 'Nunito', sans-serif;
+            font-size: 13px;
+            color: var(--text);
+            background: white;
+            outline: none;
+            transition: border-color 0.2s;
+            font-weight: 500;
+        }
+
+        .filter-bar select:focus,
+        .filter-bar input:focus {
+            border-color: var(--accent);
+        }
+
+        .filter-bar input {
+            min-width: 180px;
+        }
+
+        .filter-bar .filter-btn {
+            padding: 7px 16px;
+            border: none;
+            border-radius: 10px;
+            background: linear-gradient(135deg, #3b82f6, #60a5fa);
+            color: white;
+            font-family: 'Nunito', sans-serif;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .filter-bar .filter-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+        }
+
+        .filter-bar .filter-btn:active {
+            transform: scale(0.97);
+        }
+
+        /* Pagination */
+        .pagination {
+            display: flex;
+            gap: 6px;
+            justify-content: center;
+            align-items: center;
+            margin-top: 14px;
+        }
+
+        .pagination button {
+            padding: 6px 14px;
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            background: white;
+            color: var(--text);
+            font-family: 'Nunito', sans-serif;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .pagination button:hover:not(:disabled) {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .pagination button:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .pagination .page-info {
+            font-size: 12px;
+            color: var(--muted);
+            font-weight: 600;
+            padding: 0 8px;
+        }
+
+        /* Loading spinner */
+        .dashboard-loading {
+            text-align: center;
+            padding: 40px;
+            color: var(--muted);
+            font-weight: 600;
+        }
+
+        .dashboard-loading .spinner {
+            display: inline-block;
+            width: 32px;
+            height: 32px;
+            border: 3px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-bottom: 10px;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Empty state */
+        .empty-state {
+            text-align: center;
+            padding: 30px;
+            color: var(--muted);
+            font-weight: 500;
+        }
+
+        .empty-state .empty-icon {
+            font-size: 40px;
+            display: block;
+            margin-bottom: 10px;
+        }
+
+        /* Payload cell truncation */
+        .payload-cell {
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        /* Timestamp cell */
+        .ts-cell {
+            font-size: 12px;
+            color: var(--muted);
+            white-space: nowrap;
+        }
+
+        /* Event link in table */
+        .event-link {
+            color: var(--accent);
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .event-link:hover {
+            text-decoration: underline;
+        }
+
+        /* Responsive stats grid */
+        @media (max-width: 700px) {
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="deco deco-1"></div>
+    <div class="deco deco-2"></div>
+    <div class="deco deco-3"></div>
+
+    <div class="header">
+        <div class="logo">🗓️</div>
+        <div class="header-text">
+            <h1>AI Scheduler</h1>
+            <p>Trợ lý đặt lịch thông minh của bạn ✨</p>
+        </div>
+        <div class="tab-nav">
+            <button class="tab-btn active" data-tab="chat">💬 Chat</button>
+            <button class="tab-btn" data-tab="dashboard">📊 Dashboard</button>
+        </div>
+        <div class="status">
+            <div class="status-dot"></div>
+            Đang hoạt động
+        </div>
+    </div>
+
+    <div class="chat-area" id="chatArea">
+        <div class="welcome" id="welcome">
+            <span class="welcome-icon">🤖</span>
+            <h2>Xin chào! Tôi có thể giúp gì?</h2>
+            <p>Hãy nói chuyện với tôi để đặt lịch họp, kiểm tra lịch trống, hoặc huỷ / dời lịch một cách dễ dàng.</p>
+            <div class="quick-actions">
+                <button class="quick-btn" onclick="quickSend('Tôi muốn đặt lịch họp')">📅 Đặt lịch họp</button>
+                <button class="quick-btn" onclick="quickSend('Lịch của tôi tuần này thế nào?')">📋 Xem lịch</button>
+                <button class="quick-btn" onclick="quickSend('Tôi muốn dời lịch họp')">🔄 Dời lịch</button>
+                <button class="quick-btn" onclick="quickSend('Tôi muốn huỷ lịch họp')">❌ Huỷ lịch</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="input-area">
+        <div class="input-wrap">
+            <textarea id="input" placeholder="Nhắn tin với trợ lý... 💬" rows="1" onkeydown="handleKey(event)"
+                oninput="autoResize(this)"></textarea>
+            <button class="send-btn" onclick="sendMessage()">
+                <svg viewBox="0 0 24 24">
+                    <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+                </svg>
+            </button>
+        </div>
+        <div class="hint">Enter để gửi · Shift+Enter xuống dòng</div>
+    </div>
+
+    <!-- ── Dashboard ──────────────────────────────────────────────────────── -->
+    <div class="dashboard" id="dashboard">
+        <!-- Loading state -->
+        <div class="dashboard-loading" id="dashboardLoading">
+            <div class="spinner"></div>
+            <div>Đang tải dữ liệu...</div>
+        </div>
+
+        <!-- Stats cards -->
+        <div class="stats-grid" id="statsGrid" style="display:none;">
+            <div class="stat-card">
+                <span class="stat-icon">📅</span>
+                <div class="stat-value" id="statUpcoming">0</div>
+                <div class="stat-label">Lịch sắp tới</div>
+            </div>
+            <div class="stat-card success">
+                <span class="stat-icon">✅</span>
+                <div class="stat-value" id="statSuccess">0</div>
+                <div class="stat-label">Thành công</div>
+            </div>
+            <div class="stat-card warning">
+                <span class="stat-icon">⚠️</span>
+                <div class="stat-value" id="statWarning">0</div>
+                <div class="stat-label">Cảnh báo</div>
+            </div>
+            <div class="stat-card error">
+                <span class="stat-icon">❌</span>
+                <div class="stat-value" id="statError">0</div>
+                <div class="stat-label">Lỗi</div>
+            </div>
+        </div>
+
+        <!-- Upcoming events -->
+        <div class="section-card" id="upcomingSection" style="display:none;">
+            <h3>📅 Lịch sắp tới (7 ngày)</h3>
+            <div id="upcomingContent">
+                <div class="empty-state">
+                    <span class="empty-icon">📭</span>
+                    Không có lịch nào trong 7 ngày tới.
+                </div>
+            </div>
+        </div>
+
+        <!-- Event logs -->
+        <div class="section-card" id="logsSection" style="display:none;">
+            <h3>📋 Lịch sử sự kiện</h3>
+            <div class="filter-bar">
+                <select id="filterAgent">
+                    <option value="">Tất cả agent</option>
+                    <option value="chat">Chat</option>
+                    <option value="gmail_poller">Gmail Poller</option>
+                    <option value="email_agent">Email Agent</option>
+                    <option value="calendar_agent">Calendar Agent</option>
+                    <option value="notification_agent">Notification Agent</option>
+                    <option value="evaluation_agent">Evaluation Agent</option>
+                    <option value="spam_filter">Spam Filter</option>
+                    <option value="orchestrator">Orchestrator</option>
+                    <option value="webhook">Webhook</option>
+                </select>
+                <select id="filterStatus">
+                    <option value="">Tất cả trạng thái</option>
+                    <option value="ok">OK</option>
+                    <option value="error">Error</option>
+                    <option value="spam">Spam</option>
+                    <option value="received">Received</option>
+                    <option value="processed">Processed</option>
+                    <option value="created">Created</option>
+                    <option value="cancelled">Cancelled</option>
+                    <option value="rescheduled">Rescheduled</option>
+                    <option value="conflict">Conflict</option>
+                    <option value="sent">Sent</option>
+                    <option value="success">Success</option>
+                    <option value="failed">Failed</option>
+                </select>
+                <input type="text" id="filterSearch" placeholder="🔍 Tìm kiếm trong payload...">
+                <button class="filter-btn" onclick="applyLogFilters()">Lọc</button>
+            </div>
+            <div id="logsContent">
+                <div class="empty-state">
+                    <span class="empty-icon">📭</span>
+                    Không có log nào.
+                </div>
+            </div>
+            <div class="pagination" id="logPagination" style="display:none;">
+                <button id="prevPage" onclick="changePage(-1)">← Trước</button>
+                <span class="page-info" id="pageInfo">Trang 1 / 1</span>
+                <button id="nextPage" onclick="changePage(1)">Sau →</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API = window.location.origin;
+        let messages = [];
+        let sessionId = '';
+
+        function autoResize(el) {
+            el.style.height = 'auto';
+            el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+        }
+
+        function handleKey(e) {
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+        }
+
+        function quickSend(text) {
+            document.getElementById('input').value = text;
+            sendMessage();
+        }
+
+        function addMessage(role, content, action = null) {
+            const welcome = document.getElementById('welcome');
+            if (welcome) welcome.remove();
+
+            const area = document.getElementById('chatArea');
+            const div = document.createElement('div');
+            div.className = `message ${role}`;
+
+            const avatar = role === 'bot' ? '🤖' : '😊';
+
+            let actionHTML = '';
+            if (action && action.type === 'schedule') {
+                let timeStr = action.time || '';
+                try {
+                    const d = new Date(action.time);
+                    const days = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'];
+                    timeStr = `${days[d.getDay()]}, ${d.toLocaleDateString('vi-VN')} lúc ${d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`;
+                } catch (e) { }
+
+                actionHTML = `
+        <div class="action-card">
+          <div class="label">📋 Chi tiết lịch họp</div>
+          <div class="row"><span class="icon">📌</span><span class="val">${action.summary || ''}</span></div>
+          <div class="row"><span class="icon">📧</span><span class="val">${action.invitee_email || ''}</span></div>
+          <div class="row"><span class="icon">🕐</span><span class="val">${timeStr}</span></div>
+          ${action.location ? `<div class="row"><span class="icon">📍</span><span class="val">${action.location}</span></div>` : ''}
+        </div>`;
+            }
+
+            div.innerHTML = `
+      <div class="avatar">${avatar}</div>
+      <div>
+        <div class="bubble">${escapeHtml(content).replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')}</div>
+        ${actionHTML}
+      </div>`;
+
+            area.appendChild(div);
+            area.scrollTop = area.scrollHeight;
+        }
+
+        function addTyping() {
+            const area = document.getElementById('chatArea');
+            const div = document.createElement('div');
+            div.className = 'message bot typing';
+            div.id = 'typing';
+            div.innerHTML = `
+      <div class="avatar">🤖</div>
+      <div class="bubble">
+        <div class="dot"></div>
+        <div class="dot"></div>
+        <div class="dot"></div>
+      </div>`;
+            area.appendChild(div);
+            area.scrollTop = area.scrollHeight;
+        }
+
+        function removeTyping() {
+            const t = document.getElementById('typing');
+            if (t) t.remove();
+        }
+
+        function escapeHtml(text) {
+            return text
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/\n/g, '<br>');
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('input');
+            const text = input.value.trim();
+            if (!text) return;
+
+            input.value = '';
+            input.style.height = 'auto';
+
+            addMessage('user', text);
+            messages.push({ role: 'user', content: text });
+            addTyping();
+
+            try {
+                const res = await fetch(`${API}/chat`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ messages, session_id: sessionId }),
+                });
+                const data = await res.json();
+                removeTyping();
+                sessionId = data.session_id || sessionId;
+                addMessage('bot', data.reply, data.action);
+                messages.push({ role: 'assistant', content: data.reply });
+            } catch (err) {
+                removeTyping();
+                addMessage('bot', '⚠️ Không thể kết nối đến server. Vui lòng kiểm tra server đang chạy.');
+            }
+        }
+
+        // ── Dashboard ─────────────────────────────────────────────────────
+        let dashboardState = {
+            currentPage: 1,
+            pageSize: 20,
+            totalPages: 1,
+            refreshInterval: null,
+        };
+
+        // Tab switching
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', function () {
+                const tab = this.dataset.tab;
+                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+
+                // Toggle views
+                const chatArea = document.getElementById('chatArea');
+                const inputArea = document.querySelector('.input-area');
+                const dashboard = document.getElementById('dashboard');
+
+                if (tab === 'chat') {
+                    chatArea.style.display = 'flex';
+                    inputArea.style.display = 'block';
+                    dashboard.classList.remove('visible');
+                    dashboard.style.display = 'none';
+                    if (dashboardState.refreshInterval) {
+                        clearInterval(dashboardState.refreshInterval);
+                        dashboardState.refreshInterval = null;
+                    }
+                } else {
+                    chatArea.style.display = 'none';
+                    inputArea.style.display = 'none';
+                    dashboard.style.display = 'flex';
+                    dashboard.classList.add('visible');
+                    loadDashboard();
+                    // Auto-refresh every 30 seconds
+                    if (dashboardState.refreshInterval) clearInterval(dashboardState.refreshInterval);
+                    dashboardState.refreshInterval = setInterval(loadDashboard, 30000);
+                }
+            });
+        });
+
+        async function loadDashboard() {
+            await Promise.all([fetchDashboardStats(), fetchDashboardLogs()]);
+        }
+
+        async function fetchDashboardStats() {
+            try {
+                const res = await fetch(`${API}/dashboard/stats`);
+                const data = await res.json();
+
+                document.getElementById('dashboardLoading').style.display = 'none';
+                document.getElementById('statsGrid').style.display = 'grid';
+                document.getElementById('upcomingSection').style.display = 'block';
+
+                // Stats
+                const stats = data.stats || {};
+                const byStatus = stats.by_status || {};
+                const totalOk = (byStatus['ok'] || 0) + (byStatus['success'] || 0) + (byStatus['sent'] || 0) + (byStatus['created'] || 0) + (byStatus['processed'] || 0);
+                const totalError = byStatus['error'] || 0;
+                const totalWarning = (byStatus['conflict'] || 0) + (byStatus['spam'] || 0) + (byStatus['failed'] || 0);
+
+                document.getElementById('statUpcoming').textContent = (data.upcoming_events || []).length;
+                document.getElementById('statSuccess').textContent = totalOk;
+                document.getElementById('statWarning').textContent = totalWarning;
+                document.getElementById('statError').textContent = totalError;
+
+                // Upcoming events
+                const upcomingEl = document.getElementById('upcomingContent');
+                const events = data.upcoming_events || [];
+                if (events.length === 0) {
+                    upcomingEl.innerHTML = '<div class="empty-state"><span class="empty-icon">📭</span>Không có lịch nào trong 7 ngày tới.</div>';
+                } else {
+                    let html = '<table class="dashboard-table"><thead><tr><th>Nội dung</th><th>Thời gian</th><th>Địa điểm</th></tr></thead><tbody>';
+                    events.forEach(e => {
+                        let timeStr = e.start || '';
+                        try {
+                            const d = new Date(e.start);
+                            const days = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'];
+                            timeStr = `${days[d.getDay()]}, ${d.toLocaleDateString('vi-VN')} lúc ${d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`;
+                        } catch (ex) { }
+                        const link = e.link || '#';
+                        html += `<tr><td><a href="${link}" target="_blank" class="event-link">${e.summary || 'Sự kiện'}</a></td><td class="ts-cell">${timeStr}</td><td>${e.location || '—'}</td></tr>`;
+                    });
+                    html += '</tbody></table>';
+                    upcomingEl.innerHTML = html;
+                }
+            } catch (err) {
+                console.error('Dashboard stats error:', err);
+            }
+        }
+
+        async function fetchDashboardLogs() {
+            try {
+                const agent = document.getElementById('filterAgent').value;
+                const status = document.getElementById('filterStatus').value;
+                const search = document.getElementById('filterSearch').value;
+                const params = new URLSearchParams({
+                    page: dashboardState.currentPage,
+                    page_size: dashboardState.pageSize,
+                });
+                if (agent) params.set('agent', agent);
+                if (status) params.set('status', status);
+                if (search) params.set('search', search);
+
+                const res = await fetch(`${API}/dashboard/logs?${params}`);
+                const data = await res.json();
+
+                document.getElementById('dashboardLoading').style.display = 'none';
+                document.getElementById('logsSection').style.display = 'block';
+
+                const items = data.items || [];
+                const total = data.total || 0;
+                dashboardState.totalPages = Math.max(1, Math.ceil(total / dashboardState.pageSize));
+
+                // Update pagination
+                const pagination = document.getElementById('logPagination');
+                if (total > dashboardState.pageSize) {
+                    pagination.style.display = 'flex';
+                } else {
+                    pagination.style.display = 'none';
+                }
+                document.getElementById('pageInfo').textContent = `Trang ${dashboardState.currentPage} / ${dashboardState.totalPages}`;
+                document.getElementById('prevPage').disabled = dashboardState.currentPage <= 1;
+                document.getElementById('nextPage').disabled = dashboardState.currentPage >= dashboardState.totalPages;
+
+                // Render logs
+                const logsEl = document.getElementById('logsContent');
+                if (items.length === 0) {
+                    logsEl.innerHTML = '<div class="empty-state"><span class="empty-icon">📭</span>Không có log nào.</div>';
+                    return;
+                }
+
+                let html = '<table class="dashboard-table"><thead><tr><th>ID</th><th>Agent</th><th>Trạng thái</th><th>Payload</th><th>Thời gian</th></tr></thead><tbody>';
+                items.forEach(log => {
+                    const statusClass = getStatusClass(log.status);
+                    let payloadPreview = log.payload || '';
+                    try {
+                        const parsed = JSON.parse(payloadPreview);
+                        payloadPreview = JSON.stringify(parsed).substring(0, 80) + (JSON.stringify(parsed).length > 80 ? '...' : '');
+                    } catch (e) {
+                        payloadPreview = String(payloadPreview).substring(0, 80);
+                    }
+                    html += `<tr>
+                        <td>#${log.event_id}</td>
+                        <td><strong>${log.agent || '—'}</strong></td>
+                        <td><span class="status-badge ${statusClass}">${log.status || '—'}</span></td>
+                        <td><div class="payload-cell" title="${escapeHtml(log.payload || '')}">${escapeHtml(payloadPreview)}</div></td>
+                        <td class="ts-cell">${log.timestamp || '—'}</td>
+                    </tr>`;
+                });
+                html += '</tbody></table>';
+                logsEl.innerHTML = html;
+            } catch (err) {
+                console.error('Dashboard logs error:', err);
+            }
+        }
+
+        function getStatusClass(status) {
+            const map = {
+                'ok': 'ok',
+                'success': 'ok',
+                'sent': 'sent',
+                'created': 'created',
+                'processed': 'processed',
+                'received': 'received',
+                'error': 'error',
+                'failed': 'failed',
+                'spam': 'spam',
+                'conflict': 'conflict',
+                'cancelled': 'cancelled',
+                'rescheduled': 'rescheduled',
+                'warning': 'warning',
+            };
+            return map[status] || 'default';
+        }
+
+        function applyLogFilters() {
+            dashboardState.currentPage = 1;
+            fetchDashboardLogs();
+        }
+
+        function changePage(delta) {
+            const newPage = dashboardState.currentPage + delta;
+            if (newPage < 1 || newPage > dashboardState.totalPages) return;
+            dashboardState.currentPage = newPage;
+            fetchDashboardLogs();
+        }
+    </script>
+</body>
+
+</html>

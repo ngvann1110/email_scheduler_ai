@@ -1,0 +1,28 @@
+# Environment & secrets
+.env
+app/token.json
+app/credentials.json
+
+# Database
+*.db
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Build
+*.egg-info/
+dist/
+build/
