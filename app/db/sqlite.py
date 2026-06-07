@@ -51,6 +51,27 @@ def init_db():
     )
     """)
 
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        google_id TEXT UNIQUE NOT NULL,
+        email TEXT UNIQUE NOT NULL,
+        name TEXT,
+        picture_url TEXT,
+        google_access_token TEXT,
+        google_refresh_token TEXT,
+        token_expiry TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        last_login TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    """)
+
+    # Migration: add user_id column to system_logs if it doesn't exist
+    cur.execute("PRAGMA table_info(system_logs)")
+    columns = [row[1] for row in cur.fetchall()]
+    if "user_id" not in columns:
+        cur.execute("ALTER TABLE system_logs ADD COLUMN user_id INTEGER")
+
     conn.commit()
     conn.close()
 
@@ -169,3 +190,102 @@ def get_logs(
         "page": page,
         "page_size": page_size,
     }
+
+
+# ── User helpers ─────────────────────────────────────────────────────────────
+
+def get_user_by_google_id(google_id: str) -> dict | None:
+    """Return a user dict by Google ID, or None if not found."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT id, google_id, email, name, picture_url, "
+        "google_access_token, google_refresh_token, token_expiry, "
+        "created_at, last_login FROM users WHERE google_id = ?",
+        (google_id,),
+    )
+    row = cursor.fetchone()
+    conn.close()
+    if row is None:
+        return None
+    return {
+        "id": row[0],
+        "google_id": row[1],
+        "email": row[2],
+        "name": row[3],
+        "picture_url": row[4],
+        "google_access_token": row[5],
+        "google_refresh_token": row[6],
+        "token_expiry": row[7],
+        "created_at": row[8],
+        "last_login": row[9],
+    }
+
+
+def get_user_by_id(user_id: int) -> dict | None:
+    """Return a user dict by internal ID, or None if not found."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT id, google_id, email, name, picture_url, "
+        "google_access_token, google_refresh_token, token_expiry, "
+        "created_at, last_login FROM users WHERE id = ?",
+        (user_id,),
+    )
+    row = cursor.fetchone()
+    conn.close()
+    if row is None:
+        return None
+    return {
+        "id": row[0],
+        "google_id": row[1],
+        "email": row[2],
+        "name": row[3],
+        "picture_url": row[4],
+        "google_access_token": row[5],
+        "google_refresh_token": row[6],
+        "token_expiry": row[7],
+        "created_at": row[8],
+        "last_login": row[9],
+    }
+
+
+def create_or_update_user(
+    google_id: str,
+    email: str,
+    name: str | None = None,
+    picture_url: str | None = None,
+    access_token: str | None = None,
+    refresh_token: str | None = None,
+    token_expiry: str | None = None,
+) -> dict:
+    """
+    Insert a new user or update an existing user's tokens and last_login on re-login.
+
+    Returns the user dict.
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM users WHERE google_id = ?", (google_id,))
+    existing = cursor.fetchone()
+
+    if existing:
+        cursor.execute(
+            "UPDATE users SET email = ?, name = ?, picture_url = ?, "
+            "google_access_token = ?, google_refresh_token = ?, token_expiry = ?, "
+            "last_login = datetime('now') "
+            "WHERE google_id = ?",
+            (email, name, picture_url, access_token,
+             refresh_token, token_expiry, google_id),
+        )
+    else:
+        cursor.execute(
+            "INSERT INTO users (google_id, email, name, picture_url, "
+            "google_access_token, google_refresh_token, token_expiry) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (google_id, email, name, picture_url,
+             access_token, refresh_token, token_expiry),
+        )
+    conn.commit()
+    conn.close()
+    return get_user_by_google_id(google_id)

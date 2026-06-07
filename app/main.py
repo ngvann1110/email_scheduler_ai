@@ -3,11 +3,13 @@ import logging
 from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.sessions import SessionMiddleware
 from fastapi.responses import FileResponse
 
 from app.core.config import settings
 from app.db.sqlite import init_db
 from app.core.gmail_poller import poll_gmail
+from app.api.v1.auth import router as auth_router
 from app.api.v1.chat import router as chat_router
 from app.api.v1.webhook import router as webhook_router
 
@@ -32,7 +34,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Required for OAuth CSRF state (request.session in auth.py)
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=settings.JWT_SECRET_KEY,
+    same_site="lax",
+    https_only=False,
+)
+
 init_db()
+app.include_router(auth_router)
 app.include_router(webhook_router)
 app.include_router(chat_router)
 

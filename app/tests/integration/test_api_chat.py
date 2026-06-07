@@ -10,9 +10,9 @@ from fastapi.testclient import TestClient
 class TestChatEndpoint:
     """Tests for POST /chat."""
 
-    def test_chat_returns_reply(self, test_client, mock_openai_chat_client):
+    def test_chat_returns_reply(self, auth_client, mock_openai_chat_client):
         """Should return a reply when given a valid message."""
-        response = test_client.post(
+        response = auth_client.post(
             "/chat",
             json={"messages": [{"role": "user", "content": "Hello"}]},
         )
@@ -21,9 +21,9 @@ class TestChatEndpoint:
         assert "reply" in data
         assert len(data["reply"]) > 0
 
-    def test_chat_with_empty_message(self, test_client):
+    def test_chat_with_empty_message(self, auth_client):
         """Should handle empty message gracefully."""
-        response = test_client.post(
+        response = auth_client.post(
             "/chat",
             json={"messages": [{"role": "user", "content": ""}]},
         )
@@ -31,7 +31,7 @@ class TestChatEndpoint:
         data = response.json()
         assert "reply" in data
 
-    def test_chat_with_schedule_action(self, test_client):
+    def test_chat_with_schedule_action(self, auth_client):
         """Should return action when schedule is requested."""
         mock_client = MagicMock()
         mock_client.chat.completions.create.return_value = type(
@@ -49,7 +49,7 @@ class TestChatEndpoint:
             }
         )()
         with patch("app.agents.chat_agent.client", mock_client):
-            response = test_client.post(
+            response = auth_client.post(
                 "/chat",
                 json={
                     "messages": [{"role": "user", "content": "Schedule a meeting with guest@example.com at 9am tomorrow"}]},
@@ -59,7 +59,7 @@ class TestChatEndpoint:
         assert data.get("action") is not None
         assert data["action"]["type"] == "schedule"
 
-    def test_chat_with_cancel_action(self, test_client):
+    def test_chat_with_cancel_action(self, auth_client):
         """Should return cancel action."""
         mock_client = MagicMock()
         mock_client.chat.completions.create.return_value = type(
@@ -77,7 +77,7 @@ class TestChatEndpoint:
             }
         )()
         with patch("app.agents.chat_agent.client", mock_client):
-            response = test_client.post(
+            response = auth_client.post(
                 "/chat",
                 json={"messages": [
                     {"role": "user", "content": "Cancel my meeting at 9am tomorrow"}]},

@@ -71,6 +71,80 @@
             pointer-events: none;
         }
 
+        /* ── Auth bar ────────────────────────────────────────────────────── */
+        .auth-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 24px;
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border);
+            font-size: 13px;
+            font-weight: 500;
+            z-index: 11;
+            position: relative;
+        }
+
+        .auth-bar .auth-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .auth-bar .user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid var(--accent2);
+        }
+
+        .auth-bar .user-name {
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        .auth-bar .user-email {
+            color: var(--muted);
+            font-size: 12px;
+            margin-left: 4px;
+        }
+
+        .auth-bar .btn-login,
+        .auth-bar .btn-logout {
+            padding: 6px 16px;
+            border-radius: 8px;
+            font-family: 'Nunito', sans-serif;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: none;
+        }
+
+        .auth-bar .btn-login {
+            background: var(--accent);
+            color: white;
+            box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+        }
+
+        .auth-bar .btn-login:hover {
+            background: #2563eb;
+            transform: translateY(-1px);
+        }
+
+        .auth-bar .btn-logout {
+            background: transparent;
+            color: var(--muted);
+            border: 1px solid var(--border);
+        }
+
+        .auth-bar .btn-logout:hover {
+            color: #dc2626;
+            border-color: #dc2626;
+        }
+
         /* Header */
         .header {
             display: flex;
@@ -920,6 +994,82 @@
                 grid-template-columns: repeat(2, 1fr);
             }
         }
+
+        /* ── Login Screen ────────────────────────────────────────────────── */
+        .login-screen {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+
+        .login-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(16px);
+            border: 2px solid var(--border);
+            border-radius: 24px;
+            padding: 48px 40px;
+            text-align: center;
+            max-width: 420px;
+            width: 100%;
+            box-shadow: 0 8px 32px rgba(59, 130, 246, 0.12);
+            animation: fadeUp 0.6s ease;
+        }
+
+        .login-logo {
+            font-size: 56px;
+            margin-bottom: 16px;
+            display: block;
+            animation: float 3s ease-in-out infinite;
+        }
+
+        .login-card h1 {
+            font-family: 'Quicksand', sans-serif;
+            font-size: 28px;
+            font-weight: 800;
+            color: var(--accent);
+            margin-bottom: 12px;
+            letter-spacing: -0.3px;
+        }
+
+        .login-card p {
+            color: var(--muted);
+            font-size: 14px;
+            line-height: 1.7;
+            font-weight: 500;
+            margin-bottom: 28px;
+        }
+
+        .btn-login {
+            padding: 12px 32px;
+            border-radius: 14px;
+            font-family: 'Nunito', sans-serif;
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.25s;
+            border: none;
+            background: linear-gradient(135deg, #3b82f6, #60a5fa);
+            color: white;
+            box-shadow: 0 4px 16px rgba(59, 130, 246, 0.35);
+        }
+
+        .btn-login:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(59, 130, 246, 0.45);
+        }
+
+        .btn-login:active {
+            transform: scale(0.97);
+        }
+
+        /* ── App Container ───────────────────────────────────────────────── */
+        #appContainer {
+            display: none;
+            flex-direction: column;
+            height: 100%;
+        }
     </style>
 </head>
 
@@ -929,144 +1079,227 @@
     <div class="deco deco-2"></div>
     <div class="deco deco-3"></div>
 
-    <div class="header">
-        <div class="logo">🗓️</div>
-        <div class="header-text">
+    <!-- Login Screen (shown when unauthenticated) -->
+    <div id="loginScreen" class="login-screen">
+        <div class="login-card">
+            <span class="login-logo">🗓️</span>
             <h1>AI Scheduler</h1>
-            <p>Trợ lý đặt lịch thông minh của bạn ✨</p>
-        </div>
-        <div class="tab-nav">
-            <button class="tab-btn active" data-tab="chat">💬 Chat</button>
-            <button class="tab-btn" data-tab="dashboard">📊 Dashboard</button>
-        </div>
-        <div class="status">
-            <div class="status-dot"></div>
-            Đang hoạt động
-        </div>
-    </div>
-
-    <div class="chat-area" id="chatArea">
-        <div class="welcome" id="welcome">
-            <span class="welcome-icon">🤖</span>
-            <h2>Xin chào! Tôi có thể giúp gì?</h2>
-            <p>Hãy nói chuyện với tôi để đặt lịch họp, kiểm tra lịch trống, hoặc huỷ / dời lịch một cách dễ dàng.</p>
-            <div class="quick-actions">
-                <button class="quick-btn" onclick="quickSend('Tôi muốn đặt lịch họp')">📅 Đặt lịch họp</button>
-                <button class="quick-btn" onclick="quickSend('Lịch của tôi tuần này thế nào?')">📋 Xem lịch</button>
-                <button class="quick-btn" onclick="quickSend('Tôi muốn dời lịch họp')">🔄 Dời lịch</button>
-                <button class="quick-btn" onclick="quickSend('Tôi muốn huỷ lịch họp')">❌ Huỷ lịch</button>
-            </div>
-        </div>
-    </div>
-
-    <div class="input-area">
-        <div class="input-wrap">
-            <textarea id="input" placeholder="Nhắn tin với trợ lý... 💬" rows="1" onkeydown="handleKey(event)"
-                oninput="autoResize(this)"></textarea>
-            <button class="send-btn" onclick="sendMessage()">
-                <svg viewBox="0 0 24 24">
-                    <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
-                </svg>
+            <p>Đăng nhập bằng Google để sử dụng trợ lý đặt lịch.</p>
+            <button class="btn-login" onclick="doLogin()">
+                Đăng nhập bằng Google
             </button>
         </div>
-        <div class="hint">Enter để gửi · Shift+Enter xuống dòng</div>
     </div>
 
-    <!-- ── Dashboard ──────────────────────────────────────────────────────── -->
-    <div class="dashboard" id="dashboard">
-        <!-- Loading state -->
-        <div class="dashboard-loading" id="dashboardLoading">
-            <div class="spinner"></div>
-            <div>Đang tải dữ liệu...</div>
-        </div>
+    <!-- Authenticated Application -->
+    <div id="appContainer">
 
-        <!-- Stats cards -->
-        <div class="stats-grid" id="statsGrid" style="display:none;">
-            <div class="stat-card">
-                <span class="stat-icon">📅</span>
-                <div class="stat-value" id="statUpcoming">0</div>
-                <div class="stat-label">Lịch sắp tới</div>
+        <!-- Auth bar -->
+        <div class="auth-bar" id="authBar">
+            <div class="auth-left" id="authLeft">
+                <!-- Filled by JS -->
             </div>
-            <div class="stat-card success">
-                <span class="stat-icon">✅</span>
-                <div class="stat-value" id="statSuccess">0</div>
-                <div class="stat-label">Thành công</div>
-            </div>
-            <div class="stat-card warning">
-                <span class="stat-icon">⚠️</span>
-                <div class="stat-value" id="statWarning">0</div>
-                <div class="stat-label">Cảnh báo</div>
-            </div>
-            <div class="stat-card error">
-                <span class="stat-icon">❌</span>
-                <div class="stat-value" id="statError">0</div>
-                <div class="stat-label">Lỗi</div>
+            <div id="authRight">
+                <!-- Filled by JS -->
             </div>
         </div>
 
-        <!-- Upcoming events -->
-        <div class="section-card" id="upcomingSection" style="display:none;">
-            <h3>📅 Lịch sắp tới (7 ngày)</h3>
-            <div id="upcomingContent">
-                <div class="empty-state">
-                    <span class="empty-icon">📭</span>
-                    Không có lịch nào trong 7 ngày tới.
+        <div class="header">
+            <div class="logo">🗓️</div>
+            <div class="header-text">
+                <h1>AI Scheduler</h1>
+                <p>Trợ lý đặt lịch thông minh của bạn ✨</p>
+            </div>
+            <div class="tab-nav">
+                <button class="tab-btn active" data-tab="chat">💬 Chat</button>
+                <button class="tab-btn" data-tab="dashboard">📊 Dashboard</button>
+            </div>
+            <div class="status">
+                <div class="status-dot"></div>
+                Đang hoạt động
+            </div>
+        </div>
+
+        <div class="chat-area" id="chatArea">
+            <div class="welcome" id="welcome">
+                <span class="welcome-icon">🤖</span>
+                <h2>Xin chào! Tôi có thể giúp gì?</h2>
+                <p>Hãy nói chuyện với tôi để đặt lịch họp, kiểm tra lịch trống, hoặc huỷ / dời lịch một cách dễ dàng.
+                </p>
+                <div class="quick-actions">
+                    <button class="quick-btn" onclick="quickSend('Tôi muốn đặt lịch họp')">📅 Đặt lịch họp</button>
+                    <button class="quick-btn" onclick="quickSend('Lịch của tôi tuần này thế nào?')">📋 Xem lịch</button>
+                    <button class="quick-btn" onclick="quickSend('Tôi muốn dời lịch họp')">🔄 Dời lịch</button>
+                    <button class="quick-btn" onclick="quickSend('Tôi muốn huỷ lịch họp')">❌ Huỷ lịch</button>
                 </div>
             </div>
         </div>
 
-        <!-- Event logs -->
-        <div class="section-card" id="logsSection" style="display:none;">
-            <h3>📋 Lịch sử sự kiện</h3>
-            <div class="filter-bar">
-                <select id="filterAgent">
-                    <option value="">Tất cả agent</option>
-                    <option value="chat">Chat</option>
-                    <option value="gmail_poller">Gmail Poller</option>
-                    <option value="email_agent">Email Agent</option>
-                    <option value="calendar_agent">Calendar Agent</option>
-                    <option value="notification_agent">Notification Agent</option>
-                    <option value="evaluation_agent">Evaluation Agent</option>
-                    <option value="spam_filter">Spam Filter</option>
-                    <option value="orchestrator">Orchestrator</option>
-                    <option value="webhook">Webhook</option>
-                </select>
-                <select id="filterStatus">
-                    <option value="">Tất cả trạng thái</option>
-                    <option value="ok">OK</option>
-                    <option value="error">Error</option>
-                    <option value="spam">Spam</option>
-                    <option value="received">Received</option>
-                    <option value="processed">Processed</option>
-                    <option value="created">Created</option>
-                    <option value="cancelled">Cancelled</option>
-                    <option value="rescheduled">Rescheduled</option>
-                    <option value="conflict">Conflict</option>
-                    <option value="sent">Sent</option>
-                    <option value="success">Success</option>
-                    <option value="failed">Failed</option>
-                </select>
-                <input type="text" id="filterSearch" placeholder="🔍 Tìm kiếm trong payload...">
-                <button class="filter-btn" onclick="applyLogFilters()">Lọc</button>
+        <div class="input-area">
+            <div class="input-wrap">
+                <textarea id="input" placeholder="Nhắn tin với trợ lý... 💬" rows="1" onkeydown="handleKey(event)"
+                    oninput="autoResize(this)"></textarea>
+                <button class="send-btn" onclick="sendMessage()">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+                    </svg>
+                </button>
             </div>
-            <div id="logsContent">
-                <div class="empty-state">
-                    <span class="empty-icon">📭</span>
-                    Không có log nào.
+            <div class="hint">Enter để gửi · Shift+Enter xuống dòng</div>
+        </div>
+
+        <!-- ── Dashboard ──────────────────────────────────────────────────────── -->
+        <div class="dashboard" id="dashboard">
+            <!-- Loading state -->
+            <div class="dashboard-loading" id="dashboardLoading">
+                <div class="spinner"></div>
+                <div>Đang tải dữ liệu...</div>
+            </div>
+
+            <!-- Stats cards -->
+            <div class="stats-grid" id="statsGrid" style="display:none;">
+                <div class="stat-card">
+                    <span class="stat-icon">📅</span>
+                    <div class="stat-value" id="statUpcoming">0</div>
+                    <div class="stat-label">Lịch sắp tới</div>
+                </div>
+                <div class="stat-card success">
+                    <span class="stat-icon">✅</span>
+                    <div class="stat-value" id="statSuccess">0</div>
+                    <div class="stat-label">Thành công</div>
+                </div>
+                <div class="stat-card warning">
+                    <span class="stat-icon">⚠️</span>
+                    <div class="stat-value" id="statWarning">0</div>
+                    <div class="stat-label">Cảnh báo</div>
+                </div>
+                <div class="stat-card error">
+                    <span class="stat-icon">❌</span>
+                    <div class="stat-value" id="statError">0</div>
+                    <div class="stat-label">Lỗi</div>
                 </div>
             </div>
-            <div class="pagination" id="logPagination" style="display:none;">
-                <button id="prevPage" onclick="changePage(-1)">← Trước</button>
-                <span class="page-info" id="pageInfo">Trang 1 / 1</span>
-                <button id="nextPage" onclick="changePage(1)">Sau →</button>
+
+            <!-- Upcoming events -->
+            <div class="section-card" id="upcomingSection" style="display:none;">
+                <h3>📅 Lịch sắp tới (7 ngày)</h3>
+                <div id="upcomingContent">
+                    <div class="empty-state">
+                        <span class="empty-icon">📭</span>
+                        Không có lịch nào trong 7 ngày tới.
+                    </div>
+                </div>
+            </div>
+
+            <!-- Event logs -->
+            <div class="section-card" id="logsSection" style="display:none;">
+                <h3>📋 Lịch sử sự kiện</h3>
+                <div class="filter-bar">
+                    <select id="filterAgent">
+                        <option value="">Tất cả agent</option>
+                        <option value="chat">Chat</option>
+                        <option value="gmail_poller">Gmail Poller</option>
+                        <option value="email_agent">Email Agent</option>
+                        <option value="calendar_agent">Calendar Agent</option>
+                        <option value="notification_agent">Notification Agent</option>
+                        <option value="evaluation_agent">Evaluation Agent</option>
+                        <option value="spam_filter">Spam Filter</option>
+                        <option value="orchestrator">Orchestrator</option>
+                        <option value="webhook">Webhook</option>
+                    </select>
+                    <select id="filterStatus">
+                        <option value="">Tất cả trạng thái</option>
+                        <option value="ok">OK</option>
+                        <option value="error">Error</option>
+                        <option value="spam">Spam</option>
+                        <option value="received">Received</option>
+                        <option value="processed">Processed</option>
+                        <option value="created">Created</option>
+                        <option value="cancelled">Cancelled</option>
+                        <option value="rescheduled">Rescheduled</option>
+                        <option value="conflict">Conflict</option>
+                        <option value="sent">Sent</option>
+                        <option value="success">Success</option>
+                        <option value="failed">Failed</option>
+                    </select>
+                    <input type="text" id="filterSearch" placeholder="🔍 Tìm kiếm trong payload...">
+                    <button class="filter-btn" onclick="applyLogFilters()">Lọc</button>
+                </div>
+                <div id="logsContent">
+                    <div class="empty-state">
+                        <span class="empty-icon">📭</span>
+                        Không có log nào.
+                    </div>
+                </div>
+                <div class="pagination" id="logPagination" style="display:none;">
+                    <button id="prevPage" onclick="changePage(-1)">← Trước</button>
+                    <span class="page-info" id="pageInfo">Trang 1 / 1</span>
+                    <button id="nextPage" onclick="changePage(1)">Sau →</button>
+                </div>
             </div>
         </div>
-    </div>
+
+    </div><!-- /#appContainer -->
 
     <script>
         const API = window.location.origin;
         let messages = [];
         let sessionId = '';
+        let currentUser = null;
+
+        // ── Auth ───────────────────────────────────────────────────────────
+        async function checkAuth() {
+            try {
+                const res = await fetch(`${API}/auth/me`, { credentials: 'include' });
+                if (res.ok) {
+                    currentUser = await res.json();
+                    document.getElementById('loginScreen').style.display = 'none';
+                    document.getElementById('appContainer').style.display = 'flex';
+                    renderAuthBar();
+                } else if (res.status === 401) {
+                    currentUser = null;
+                    document.getElementById('loginScreen').style.display = 'flex';
+                    document.getElementById('appContainer').style.display = 'none';
+                    renderAuthBar();
+                }
+            } catch (e) {
+                currentUser = null;
+                document.getElementById('loginScreen').style.display = 'flex';
+                document.getElementById('appContainer').style.display = 'none';
+                renderAuthBar();
+            }
+        }
+
+        function renderAuthBar() {
+            const left = document.getElementById('authLeft');
+            const right = document.getElementById('authRight');
+
+            if (currentUser) {
+                left.innerHTML = `
+                    ${currentUser.picture_url ? `<img src="${escapeHtml(currentUser.picture_url)}" class="user-avatar" alt="avatar">` : '🔵'}
+                    <span class="user-name">${escapeHtml(currentUser.name || currentUser.email)}</span>
+                `;
+                right.innerHTML = `<button class="btn-logout" onclick="doLogout()">Đăng xuất</button>`;
+            } else {
+                left.innerHTML = '';
+                right.innerHTML = `<button class="btn-login" onclick="doLogin()">Đăng nhập bằng Google</button>`;
+            }
+        }
+
+        function doLogin() {
+            window.location.href = `${API}/auth/login`;
+        }
+
+        async function doLogout() {
+            await fetch(`${API}/auth/logout`, { method: 'POST', credentials: 'include' });
+            currentUser = null;
+            document.getElementById('loginScreen').style.display = 'flex';
+            document.getElementById('appContainer').style.display = 'none';
+            renderAuthBar();
+        }
+
+        // Initialize auth on page load
+        checkAuth();
 
         function autoResize(el) {
             el.style.height = 'auto';
@@ -1145,7 +1378,7 @@
 
         function escapeHtml(text) {
             return text
-                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/&/g, '&').replace(/</g, '<').replace(/>/g, '>')
                 .replace(/\n/g, '<br>');
         }
 
@@ -1165,8 +1398,18 @@
                 const res = await fetch(`${API}/chat`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
                     body: JSON.stringify({ messages, session_id: sessionId }),
                 });
+                if (res.status === 401) {
+                    removeTyping();
+                    addMessage('bot', '⚠️ Vui lòng đăng nhập để sử dụng trợ lý.');
+                    currentUser = null;
+                    document.getElementById('loginScreen').style.display = 'flex';
+                    document.getElementById('appContainer').style.display = 'none';
+                    renderAuthBar();
+                    return;
+                }
                 const data = await res.json();
                 removeTyping();
                 sessionId = data.session_id || sessionId;
@@ -1226,7 +1469,11 @@
 
         async function fetchDashboardStats() {
             try {
-                const res = await fetch(`${API}/dashboard/stats`);
+                const res = await fetch(`${API}/dashboard/stats`, { credentials: 'include' });
+                if (res.status === 401) {
+                    // Silently fail for dashboard when not authenticated
+                    return;
+                }
                 const data = await res.json();
 
                 document.getElementById('dashboardLoading').style.display = 'none';
@@ -1283,7 +1530,11 @@
                 if (status) params.set('status', status);
                 if (search) params.set('search', search);
 
-                const res = await fetch(`${API}/dashboard/logs?${params}`);
+                const res = await fetch(`${API}/dashboard/logs?${params}`, { credentials: 'include' });
+                if (res.status === 401) {
+                    // Silently fail
+                    return;
+                }
                 const data = await res.json();
 
                 document.getElementById('dashboardLoading').style.display = 'none';

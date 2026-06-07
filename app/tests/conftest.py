@@ -52,7 +52,7 @@ def db_connection(temp_db_path: str):
     original_db_name = sqlite_mod.DB_NAME
     sqlite_mod.DB_NAME = temp_db_path
 
-    # Init the table
+    # Init the system_logs table
     conn = sqlite3.connect(temp_db_path)
     cur = conn.cursor()
     cur.execute("""
@@ -66,6 +66,22 @@ def db_connection(temp_db_path: str):
     """)
     conn.commit()
     conn.close()
+
+    # Also init the users table + test user so auth-protected dashboard
+    # endpoints can resolve the test user via get_current_user.
+    import app.db.sqlite as _sql_mod
+    _orig = _sql_mod.DB_NAME
+    _sql_mod.DB_NAME = temp_db_path
+    from app.db.sqlite import init_db as _init_db
+    _init_db()
+    _conn = _sql_mod.get_connection()
+    _conn.execute(
+        "INSERT OR IGNORE INTO users (google_id, email, name) VALUES (?, ?, ?)",
+        ("test-google-id", "test@example.com", "Test User"),
+    )
+    _conn.commit()
+    _conn.close()
+    _sql_mod.DB_NAME = _orig
 
     yield temp_db_path
 
@@ -308,8 +324,10 @@ def sample_email(sample_email_dict):
 def test_client():
     from fastapi import FastAPI
     from fastapi.middleware.cors import CORSMiddleware
+    from starlette.middleware.sessions import SessionMiddleware
     from app.api.v1.chat import router as chat_router
     from app.api.v1.webhook import router as webhook_router
+    from app.api.v1.auth import router as auth_router
 
     app = FastAPI(title="Email Scheduler AI - Test")
     app.add_middleware(
@@ -317,6 +335,14 @@ def test_client():
         allow_origins=["*"],
         allow_methods=["*"],
         allow_headers=["*"],
+    )
+
+    # Required for auth.py request.session
+    app.add_middleware(
+        SessionMiddleware,
+        secret_key="test-secret-key-for-sessions",
+        same_site="lax",
+        https_only=False,
     )
 
     import tempfile
@@ -327,6 +353,17 @@ def test_client():
     from app.db.sqlite import init_db
     init_db()
 
+    # Create a test user + JWT so authenticated tests can use the auth_client fixture
+    import app.db.sqlite as _sql_mod
+    _conn = _sql_mod.get_connection()
+    _conn.execute(
+        "INSERT OR IGNORE INTO users (google_id, email, name) VALUES (?, ?, ?)",
+        ("test-google-id", "test@example.com", "Test User"),
+    )
+    _conn.commit()
+    _conn.close()
+
+    app.include_router(auth_router)
     app.include_router(webhook_router)
     app.include_router(chat_router)
 
@@ -335,6 +372,18 @@ def test_client():
         return {"status": "ui_available"}
 
     return TestClient(app)
+
+
+@pytest.fixture
+def auth_client(test_client):
+    """TestClient that automatically includes a valid JWT auth header."""
+    from app.core.jwt_auth import create_access_token
+    from app.db.sqlite import get_user_by_google_id
+
+    test_user = get_user_by_google_id("test-google-id")
+    test_token = create_access_token(test_user["id"], test_user["email"])
+    test_client.headers["Authorization"] = f"Bearer {test_token}"
+    return test_client
 
 
 # ── Mock credentials / token files ───────────────────────────────────────────

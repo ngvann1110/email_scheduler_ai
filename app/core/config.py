@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     * **Google OAuth** – file paths to OAuth credentials & token.
     * **Email** – organiser identity and Gmail polling frequency.
     * **Database** – SQLite file path.
+    * **JWT Auth** – settings for user authentication via JWT.
+    * **Google OAuth Login** – client ID, secret, redirect URI for user login.
     * **App** – runtime environment and CORS configuration.
     """
 
@@ -46,6 +48,26 @@ class Settings(BaseSettings):
     # ── Database ────────────────────────────────────────────────────────────
     DATABASE_PATH: str = "logs.db"
     """Path to the SQLite database file."""
+
+    # ── JWT Auth ────────────────────────────────────────────────────────────
+    JWT_SECRET_KEY: str = "change-me-in-production-use-random-string"
+    """Secret key used to sign JWT tokens."""
+
+    JWT_ALGORITHM: str = "HS256"
+    """Algorithm used for JWT signing and verification."""
+
+    JWT_EXPIRE_MINUTES: int = 1440
+    """JWT token expiration time in minutes (default: 24 hours)."""
+
+    # ── Google OAuth Login (user-facing) ────────────────────────────────────
+    GOOGLE_OAUTH_CLIENT_ID: str = ""
+    """Google OAuth client ID for user login. Reads from credentials.json if empty."""
+
+    GOOGLE_OAUTH_CLIENT_SECRET: str = ""
+    """Google OAuth client secret for user login. Reads from credentials.json if empty."""
+
+    GOOGLE_OAUTH_REDIRECT_URI: str = "http://localhost:8000/auth/callback"
+    """Redirect URI after Google OAuth consent screen."""
 
     # ── App ─────────────────────────────────────────────────────────────────
     APP_ENV: str = "development"

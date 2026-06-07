@@ -3,13 +3,14 @@ import logging
 import uuid
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 from app.agents.chat_agent import chat
 from app.core.auth import get_calendar_service, get_gmail_service
 from app.core.config import settings
+from app.core.jwt_auth import get_current_user
 from app.core.logger import log_event
 from app.db.sqlite import get_connection
 
@@ -336,7 +337,7 @@ def _save_pending_cancel(token: str, action: dict):
 
 # ── Routes ────────────────────────────────────────────────────────────────────
 @router.post("/chat", response_model=ChatResponse)
-async def chat_endpoint(req: ChatRequest):
+async def chat_endpoint(req: ChatRequest, current_user: dict = Depends(get_current_user)):
     messages = [m.dict() for m in req.messages]
     result = chat(messages)
     reply = result["reply"]
@@ -450,7 +451,7 @@ async def chat_endpoint(req: ChatRequest):
             reply += f"\n\n⚠️ Lỗi dời lịch: {e}"
 
     log_event(agent="chat", status="ok", payload={
-              "reply": reply[:200], "action": action})
+              "reply": reply[:200], "action": action, "user_id": current_user["id"]})
     return ChatResponse(reply=reply, action=action, session_id=session_id)
 
 
@@ -690,7 +691,7 @@ async def confirm_cancel(token: str):
 
 
 @router.get("/dashboard/stats")
-async def dashboard_stats():
+async def dashboard_stats(current_user: dict = Depends(get_current_user)):
     """
     Return dashboard statistics:
       - Upcoming events from Google Calendar
@@ -713,6 +714,7 @@ async def dashboard_stats():
 
 @router.get("/dashboard/logs")
 async def dashboard_logs(
+    current_user: dict = Depends(get_current_user),
     agent: str = None,
     status: str = None,
     search: str = None,
