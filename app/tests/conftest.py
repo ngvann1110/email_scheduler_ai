@@ -232,7 +232,7 @@ def mock_gmail_service():
     msg = MIMEText("Hello, this is a test email body.")
     msg["From"] = "sender@example.com"
     msg["Subject"] = "Test Subject"
-    msg["Date"] = "2026-06-06T10:00:00+07:00"
+    msg["Date"] = "Mon, 06 Jun 2026 10:00:00 +0700"
     raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
 
     mock_get = MagicMock()

@@ -90,6 +90,14 @@ async def login(request: Request):
     )
     flow.redirect_uri = settings.GOOGLE_OAUTH_REDIRECT_URI
 
+    # Clear any stale OAuth session data from a previous incomplete login.
+    # This prevents a second /auth/login call from overwriting an in-flight
+    # state, and ensures failed-callback remnants never cause a mismatch.
+    if request.session.get("oauth_state") or request.session.get("code_verifier"):
+        logger.info("[OAuth] Cleared stale OAuth session")
+        request.session.pop("oauth_state", None)
+        request.session.pop("code_verifier", None)
+
     # Generate state for CSRF protection
     state = secrets.token_urlsafe(32)
     # Requires starlette SessionMiddleware
@@ -104,7 +112,9 @@ async def login(request: Request):
     request.session["code_verifier"] = flow.code_verifier
 
     logger.info("[Auth] Chuyển hướng đến Google OAuth")
-    return RedirectResponse(url=auth_url)
+
+    response = RedirectResponse(url=auth_url)
+    return response
 
 
 @router.get("/callback")
@@ -216,10 +226,15 @@ async def auth_callback(request: Request, code: str = None, state: str = None):
         return response
 
     except Exception as e:
+        # Clear stale OAuth session data so a subsequent login attempt is clean.
+        request.session.pop("oauth_state", None)
+        request.session.pop("code_verifier", None)
+        logger.info("[OAuth] Cleared OAuth session after failed callback")
+
         logger.error("[Auth] Lỗi xác thực OAuth: %s", e)
         return JSONResponse(
             status_code=400,
-            content={"error": f"Lỗi xác thực: {str(e)}"},
+            content={"error": "Lỗi xác thực: %s" % e},
         )
 
 
