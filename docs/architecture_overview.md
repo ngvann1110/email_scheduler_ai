@@ -1,7 +1,7 @@
 # Email Scheduler AI — Architecture Overview
 
 > **Repository:** `email_scheduler_ai` | **Commit:** `c9e73fcd` | **Date:** 2026-06-08
-> **Updated:** 2026-06-11 — Added Email Intelligence Agent, Analytics Dashboard, Daily Digest
+> **Updated:** 2026-06-11 — Added Email Intelligence Agent, Analytics Dashboard
 
 ---
 
@@ -30,7 +30,7 @@ C4Context
     Rel(email_scheduler, "Manages events", calendar, "Calendar API")
     Rel(chat_user, "Uses", email_scheduler, "HTTPS /chat")
     Rel(invitee, "Clicks link", email_scheduler, "HTTPS /chat/{action}/{token}")
-    Rel(email_scheduler, "Sends replies + digest", gmail, "Gmail API")
+    Rel(email_scheduler, "Sends replies", gmail, "Gmail API")
 ```
 
 ### Container Diagram
@@ -42,7 +42,7 @@ C4Container
     Person(user, "User", "Email or Chat user")
 
     Container_Boundary(app, "Email Scheduler AI Application") {
-        Container(api, "FastAPI Server", "Python 3.10+", "Serves REST API, serves chat UI, runs background poller + daily digest")
+        Container(api, "FastAPI Server", "Python 3.10+", "Serves REST API, serves chat UI, runs background poller")
         ContainerDb(db, "SQLite Database", "File DB", "Stores system_logs, pending actions, users, email_intelligence")
         Container(spa, "Chat SPA", "Vanilla HTML/CSS/JS", "Single-file frontend served at /ui")
     }
@@ -84,7 +84,6 @@ graph TB
         JWT["JWT Auth<br/>(jwt_auth.py)"]
         Logger["Logger<br/>(logger.py)"]
         Poller["Gmail Poller<br/>(gmail_poller.py)"]
-        DailyDigest["Daily Digest<br/>(daily_digest.py)"]
     end
 
     subgraph Agents["AI Agents (app/agents/)"]
@@ -133,9 +132,6 @@ graph TB
     ChatAgent --> OpenAI
     ChatAgent --> Calendar
 
-    DailyDigest --> SQLite
-    DailyDigest --> NotificationAgent
-
     Logger --> SQLite
     ChatAPI --> SQLite
     Orchestrator --> SQLite
@@ -166,10 +162,10 @@ graph TB
 │  │Filter│ │Agent │ │Intel │ │dar   │ │lict  │ │ication│   │
 │  │      │ │      │ │Agent │ │Agent │ │Agent │ │Agent │    │
 │  └──────┘ └──────┘ └──────┘ └──────┘ └──────┘ └──────┘    │
-│  ┌──────┐ ┌──────────┐ ┌──────────┐                        │
-│  │Chat  │ │Evaluation│ │Daily     │                        │
-│  │Agent │ │  Agent   │ │Digest    │                        │
-│  └──────┘ └──────────┘ └──────────┘                        │
+│  ┌──────┐ ┌──────────┐                                      │
+│  │Chat  │ │Evaluation│                                      │
+│  │Agent │ │  Agent   │                                      │
+│  └──────┘ └──────────┘                                      │
 ├─────────────────────────────────────────────────────────────┤
 │                    INFRASTRUCTURE LAYER                      │
 │  ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐ ┌──────────┐ │
@@ -611,43 +607,6 @@ sequenceDiagram
 - `app/orchestrator/orchestrator.py` — run_pipeline() routing logic
 - `app/db/sqlite.py` — insert_email_analysis()
 
-### Flow 9: Daily Digest
-
-```mermaid
-sequenceDiagram
-    participant Scheduler as asyncio.create_task()
-    participant DailyDigest as Daily Digest (daily_digest.py)
-    participant SQLite
-    participant NotifA as Notification Agent
-    participant Gmail
-
-    Note over Scheduler: Runs at DIGEST_TIME (default 07:00) every morning
-
-    loop Daily at DIGEST_TIME
-        DailyDigest->>SQLite: get_email_statistics() (yesterday)
-        SQLite-->>DailyDigest: {total, meeting, report, partnership, support, announcement, other}
-
-        DailyDigest->>SQLite: get_recent_emails(limit=50, offset=0) (yesterday)
-        SQLite-->>DailyDigest: [emails sorted by importance_score DESC]
-
-        DailyDigest->>DailyDigest: Select top 3 most important emails
-        DailyDigest->>DailyDigest: Generate digest body:
-        Note over DailyDigest: "Good Morning! You received: 5 Reports, 2 Partnerships, 3 Support emails.\n\nTop important emails:\n1. ...\n2. ...\n3. ..."
-
-        DailyDigest->>NotifA: send_notification(email=DIGEST_EMAIL, email_result=digest_result, calendar_result=None, conflict_result=None)
-        NotifA->>Gmail: users().messages().send(raw=base64_email)
-        Gmail-->>NotifA: {id, threadId}
-
-        DailyDigest->>SQLite: log_event("daily_digest", "sent", payload)
-    end
-```
-
-**Source files:**
-- `app/core/daily_digest.py` — run_daily_digest() (async loop, waits until DIGEST_TIME)
-- `app/main.py` — asyncio.create_task(run_daily_digest()) at startup
-- `app/core/config.py` — DIGEST_TIME, DIGEST_EMAIL settings
-- `app/agents/notification_agent.py` — send_notification() reused for digest delivery
-
 ---
 
 ## 4. Request Lifecycle (API-Focused)
@@ -770,9 +729,9 @@ stateDiagram-v2
 
 ## 6. Component Interaction Matrix
 
-| Component | Config | Auth | JWT | SQLite | Spam | Email | EmailIntel | Cal | Conflict | Chat | Notif | Eval | Orchestrator | Poller | Gmail API | Cal API | OpenAI | DailyDigest |
-|-----------|--------|------|-----|--------|------|-------|-----------|-----|---------|------|-------|------|-------------|--------|-----------|---------|--------|-------------|
-| **main.py** | ✓ | — | — | ✓ (init) | — | — | — | — | — | — | — | — | — | ✓ (start) | — | — | — | ✓ (start) |
+| Component | Config | Auth | JWT | SQLite | Spam | Email | EmailIntel | Cal | Conflict | Chat | Notif | Eval | Orchestrator | Poller | Gmail API | Cal API | OpenAI |
+|-----------|--------|------|-----|--------|------|-------|-----------|-----|---------|------|-------|------|-------------|--------|-----------|---------|--------|
+| **main.py** | ✓ | — | — | ✓ (init) | — | — | — | — | — | — | — | — | — | ✓ (start) | — | — | — |
 | **auth_router** | ✓ | ✓ | ✓ | ✓ | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
 | **chat_router** | — | — | ✓ | ✓ | — | — | — | — | — | ✓ | — | — | — | — | — | — | — | — |
 | **webhook_router**| — | — | — | — | — | — | — | — | — | — | — | — | ✓ | — | — | — | — | — |
@@ -784,8 +743,7 @@ stateDiagram-v2
 | **chat_agent** | ✓ | ✓ | — | — | — | — | — | — | — | — | — | — | — | — | — | ✓ | ✓ | — |
 | **notification_agent**| — | ✓ | — | — | — | — | — | — | — | — | — | — | — | — | ✓ | — | — | — |
 | **evaluation_agent**| — | — | — | ✓ | — | — | — | — | — | ✓ | — | — | — | — | — | — | — | — |
-| **orchestrator** | — | — | — | ✓ | — | ✓ | ✓ | ✓ | ✓ | — | ✓ | — | — | — | — | — | — | — |
-| **daily_digest** | ✓ | — | — | ✓ | — | — | — | — | — | — | ✓ | — | — | — | ✓ | — | — | — |
+| **orchestrator** | — | — | — | ✓ | — | ✓ | ✓ | ✓ | ✓ | — | ✓ | — | — | — | — | — | — |
 
 ✓ = Direct dependency/call | — = No interaction
 
@@ -795,13 +753,12 @@ stateDiagram-v2
 
 | File | Lines | Primary Role | Key Exports |
 |------|-------|-------------|-------------|
-| `app/main.py` | ~85 | Entry point | FastAPI app, startup (init_db + poll_gmail + daily_digest), routes |
+| `app/main.py` | ~85 | Entry point | FastAPI app, startup (init_db + poll_gmail), routes |
 | `app/core/config.py` | ~60 | Configuration | `Settings` (Pydantic BaseSettings) |
 | `app/core/auth.py` | 84 | Google OAuth | `get_gmail_service()`, `get_calendar_service()` |
 | `app/core/jwt_auth.py` | 78 | JWT operations | `create_token()`, `decode_token()`, `get_current_user()` |
 | `app/core/logger.py` | ~30 | Event logging | `log_event()` |
 | `app/core/gmail_poller.py` | 143 | Email ingestion | `poll_gmail()` |
-| `app/core/daily_digest.py` | ~120 | Daily digest job | `run_daily_digest()` |
 | `app/api/v1/auth.py` | ~252 | User auth | `google_auth_url()`, `callback()`, `me()`, `logout()` |
 | `app/api/v1/chat.py` | ~800 | Chat + dashboard | `chat()`, 6 confirmation endpoints, `dashboard_stats()`, `dashboard_email_stats()`, `dashboard_recent_emails()`, `dashboard_logs()` |
 | `app/api/v1/webhook.py` | ~30 | Webhook | `gmail_webhook()` |
@@ -811,7 +768,7 @@ stateDiagram-v2
 | `app/agents/calendar_agent.py` | 301 | Calendar operations | `process_schedule()`, `process_cancel()`, `process_reschedule()` |
 | `app/agents/conflict_agent.py` | ~175 | Alternative slots | `find_alternatives()` |
 | `app/agents/chat_agent.py` | ~200 | Chat interaction | `chat()`, `evaluate_email()` |
-| `app/agents/notification_agent.py` | ~380 | Email reply | `send_notification()`, `send_reply()` — also used for daily digest delivery |
+| `app/agents/notification_agent.py` | ~380 | Email reply | `send_notification()`, `send_reply()` |
 | `app/agents/evaluation_agent.py` | ~120 | Quality evaluation | `evaluate_and_retry()` |
 | `app/orchestrator/orchestrator.py` | ~200 | Pipeline routing | `run_pipeline()` — routes calendar emails to calendar workflow, non-calendar emails to Email Intelligence Agent |
 | `app/db/sqlite.py` | ~250 | Database layer | `init_db()`, `get_logs()`, `get_stats()`, user + pending CRUD, `insert_email_analysis()`, `get_email_analysis()`, `get_email_statistics()`, `get_recent_emails()` |
@@ -839,7 +796,7 @@ stateDiagram-v2
 | Calendar Agent | `calendar_agent.py` | No | Calendar CRUD operations |
 | Conflict Agent | `conflict_agent.py` | No | Find alternative time slots |
 | Chat Agent | `chat_agent.py` | GPT-4o | Interactive chat scheduling |
-| Notification Agent | `notification_agent.py` | No | Send email replies + daily digest |
+| Notification Agent | `notification_agent.py` | No | Send email replies |
 | Evaluation Agent | `evaluation_agent.py` | GPT-4o (via Chat) | Quality evaluation with retry |
 
 ### API Endpoints (17 total)

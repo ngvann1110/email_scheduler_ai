@@ -113,17 +113,7 @@
 | UTF-8 Vietnamese Content | ✅ | All templates | Unicode box-drawing + Vietnamese text | N/A |
 | Email Threading | ❌ | N/A | No `In-Reply-To` or `References` headers | N/A |
 
-### H. Daily Digest
-
-| Feature | Status | Entry Point | Backend Components | Frontend Components |
-|---------|--------|-------------|-------------------|-------------------|
-| Scheduled Daily Digest | ✅ | Startup `asyncio.create_task` | `core/daily_digest.py:run_daily_digest()` — waits until DIGEST_TIME | N/A |
-| Category Aggregation | ✅ | Digest generation | `db/sqlite.py:get_email_statistics()` — counts by category | N/A |
-| Top 3 Important Emails | ✅ | Digest generation | `db/sqlite.py:get_recent_emails()` — sorted by importance DESC | N/A |
-| Digest Email Sending | ✅ | Reuses Notification Agent | `agents/notification_agent.py:send_reply()` — sends digest email | N/A |
-| Vietnamese Morning Greeting | ✅ | Digest template | `core/daily_digest.py:_build_digest_content()` | N/A |
-
-### I. Evaluation & Retry
+### H. Evaluation & Retry
 
 | Feature | Status | Entry Point | Backend Components | Frontend Components |
 |---------|--------|-------------|-------------------|-------------------|
@@ -281,7 +271,6 @@
 | Conflict Resolution | 8 | 7 | 1 | 0 |
 | Email Intelligence | 7 | 7 | 0 | 0 |
 | Notification Emails | 10 | 9 | 0 | 1 |
-| Daily Digest | 5 | 5 | 0 | 0 |
 | Evaluation & Retry | 5 | 5 | 0 | 0 |
 | Authentication | 12 | 9 | 0 | 3 |
 | Chat UI | 14 | 13 | 0 | 1 |
@@ -289,9 +278,9 @@
 | Database | 9 | 7 | 0 | 2 |
 | Infrastructure | 6 | 5 | 0 | 1 |
 | Testing | 8 | 7 | 0 | 1 |
-| **TOTAL** | **127** | **113** | **3** | **11** |
+| **TOTAL** | **122** | **108** | **3** | **11** |
 
-**Implementation rate: 89.0% (113/127)**
+**Implementation rate: 88.5% (108/122)**
 
 ---
 

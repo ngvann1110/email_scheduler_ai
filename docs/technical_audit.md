@@ -9,7 +9,7 @@
 
 ### Problem Solved
 
-Email Scheduler AI automates meeting scheduling via email. Users send an email requesting a meeting — the system reads it, classifies intent via GPT-4o, creates/updates/cancels events on Google Calendar, detects conflicts, proposes alternatives, and sends confirmation or conflict emails back. A chat UI provides an interactive alternative to email. Non-calendar business emails are analyzed by the Email Intelligence Agent for categorization, summarization, and information extraction — powering an analytics dashboard and a daily digest report. The system eliminates the manual back-and-forth of scheduling meetings while providing email intelligence insights.
+Email Scheduler AI automates meeting scheduling via email. Users send an email requesting a meeting — the system reads it, classifies intent via GPT-4o, creates/updates/cancels events on Google Calendar, detects conflicts, proposes alternatives, and sends confirmation or conflict emails back. A chat UI provides an interactive alternative to email. Non-calendar business emails are analyzed by the Email Intelligence Agent for categorization, summarization, and information extraction — powering an analytics dashboard. The system eliminates the manual back-and-forth of scheduling meetings while providing email intelligence insights.
 
 **Code evidence:**
 
@@ -21,7 +21,6 @@ Email Scheduler AI automates meeting scheduling via email. Users send an email r
 | `app/agents/notification_agent.py` | 309–369 | `send_notification()` replies with confirmation/conflict emails |
 | `app/agents/chat_agent.py` | 151–200 | `chat()` provides interactive scheduling via LLM |
 | `app/agents/email_intelligence_agent.py` | ~225 | `process_email()` classifies non-calendar emails, generates summaries, extracts structured data |
-| `app/core/daily_digest.py` | ~120 | `run_daily_digest()` aggregates yesterday's emails and sends morning digest via Notification Agent |
 
 ### Target Users
 
@@ -44,7 +43,6 @@ Email Scheduler AI automates meeting scheduling via email. Users send an email r
 | Confirmation Link | Invitee clicks link | `api/v1/chat.py:458-639` | Pending invite resolved |
 | Webhook → Schedule | Gmail push notification | `api/v1/webhook.py:9` | Pipeline run immediately |
 | Email → Intelligence | Non-calendar email (intent="other") | `orchestrator.py` → `email_intelligence_agent.py` | Email categorized, summarized, stored in SQLite |
-| Daily Digest | Scheduled time (default 07:00) | `daily_digest.py:run_daily_digest()` | Digest email sent with category counts + top 3 emails |
 | Dashboard Analytics | Authenticated user | `api/v1/chat.py:dashboard_email_stats` | Email category statistics for dashboard |
 
 ---
@@ -242,8 +240,6 @@ No rate limiting, no request logging middleware, no compression. Authentication 
 
 2. **`asyncio.create_task(poll_gmail())`** — launches background polling loop as long-running coroutine
 
-3. **`asyncio.create_task(run_daily_digest())`** — launches daily digest scheduler (waits until DIGEST_TIME, then runs every 24h)
-
 ### Dependency Flow
 
 ```
@@ -271,7 +267,6 @@ Each agent module is independently importable. Cross-agent communication goes th
 | `evaluation_agent` | `chat_agent.evaluate_email()` | `evaluate_and_retry() → dict` |
 | `email_intelligence_agent` | `config`, OpenAI SDK | `process_email(email) → dict` |
 | `orchestrator` | All agents | `run_pipeline(email) → dict` |
-| `daily_digest` | `sqlite`, `notification_agent` | `run_daily_digest()` |
 | `gmail_poller` | `auth`, `spam_filter`, `evaluation_agent`, `orchestrator` | `poll_gmail()` — infinite loop |
 
 ---

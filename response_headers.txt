@@ -1,0 +1,8 @@
+HTTP/1.1 307 Temporary Redirect
+date: Wed, 10 Jun 2026 19:19:06 GMT
+server: uvicorn
+content-length: 0
+location: https://accounts.google.com/o/oauth2/auth?response_type=code&client_id=639934967459-nuca6bg2alu3th19i8k5licc8mk5ran7.apps.googleusercontent.com&redirect_uri=http%3A%2F%2Flocalhost%3A8000%2Fauth%2Fcallback&scope=openid+https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fuserinfo.email+https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fuserinfo.profile+https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fcalendar+https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fgmail.send+https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fgmail.readonly&state=L2SfHv9sNM1wl-hD2KvXjk_v1cD2QWGvC442R6vIZUk&code_challenge=b47h5DIh0QUE3SKHAilxb_Tdv8FZdOg9kMCPoEwhCA0&code_challenge_method=S256&access_type=offline&prompt=consent
+vary: Cookie
+set-cookie: session=eyJvYXV0aF9zdGF0ZSI6ICJMMlNmSHY5c05NMXdsLWhEMkt2WGprX3YxY0QyUVdHdkM0NDJSNnZJWlVrIiwgImNvZGVfdmVyaWZpZXIiOiAiYW5Na1Q0fnJrV1VPdjQ3dEF1MFp0VUVfTlA5eXdhU3dXalpENTlmR2tTZGlrTFkwc3I1aDU2aEZCLmlDNk9FSk4ueTdUVEl5cmx6Z1h5MXpUZFJPNnJUNjUyNVdETEI2emR+VTAtanAxeVN1a1pmNklQN2MyVGFKWDAtcUM2VXMifQ==.aim4qw.JQql2jwI_Sxq5OjEqafdhWNUlkk; path=/; Max-Age=1209600; httponly; samesite=lax
+
