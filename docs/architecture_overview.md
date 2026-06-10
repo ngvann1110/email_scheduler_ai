@@ -1,6 +1,7 @@
 # Email Scheduler AI — Architecture Overview
 
 > **Repository:** `email_scheduler_ai` | **Commit:** `c9e73fcd` | **Date:** 2026-06-08
+> **Updated:** 2026-06-11 — Added Email Intelligence Agent, Analytics Dashboard, Daily Digest
 
 ---
 
@@ -16,20 +17,20 @@ C4Context
     Person(chat_user, "Chat User", "Schedules via web chat UI")
     Person(invitee, "Meeting Invitee", "Confirms/declines meetings via link")
 
-    System(email_scheduler, "Email Scheduler AI", "Automated meeting scheduling\nwith AI + Google Calendar")
+    System(email_scheduler, "Email Scheduler AI", "Automated meeting scheduling\nwith AI + Google Calendar\n+ Email Intelligence Analytics")
 
     System_Ext(gmail, "Google Gmail", "Email API v1")
     System_Ext(calendar, "Google Calendar", "Calendar API v3")
-    System_Ext(openai, "OpenAI GPT-4o", "LLM for intent classification + chat")
+    System_Ext(openai, "OpenAI GPT-4o", "LLM for intent classification + chat + email intelligence")
 
     Rel(email_user, "Sends email to", gmail, "SMTP")
     Rel(gmail, "Pushes notification", email_scheduler, "Webhook / Poll")
     Rel(email_scheduler, "Reads inbox", gmail, "Gmail API")
-    Rel(email_scheduler, "Classifies + chats", openai, "REST API")
+    Rel(email_scheduler, "Classifies + chats + analyzes", openai, "REST API")
     Rel(email_scheduler, "Manages events", calendar, "Calendar API")
     Rel(chat_user, "Uses", email_scheduler, "HTTPS /chat")
     Rel(invitee, "Clicks link", email_scheduler, "HTTPS /chat/{action}/{token}")
-    Rel(email_scheduler, "Sends replies", gmail, "Gmail API")
+    Rel(email_scheduler, "Sends replies + digest", gmail, "Gmail API")
 ```
 
 ### Container Diagram
@@ -41,8 +42,8 @@ C4Container
     Person(user, "User", "Email or Chat user")
 
     Container_Boundary(app, "Email Scheduler AI Application") {
-        Container(api, "FastAPI Server", "Python 3.10+", "Serves REST API, serves chat UI, runs background poller")
-        ContainerDb(db, "SQLite Database", "File DB", "Stores system_logs, pending actions, users")
+        Container(api, "FastAPI Server", "Python 3.10+", "Serves REST API, serves chat UI, runs background poller + daily digest")
+        ContainerDb(db, "SQLite Database", "File DB", "Stores system_logs, pending actions, users, email_intelligence")
         Container(spa, "Chat SPA", "Vanilla HTML/CSS/JS", "Single-file frontend served at /ui")
     }
 
@@ -74,6 +75,7 @@ graph TB
         ChatAPI["Chat API v1<br/>(/chat/*)"]
         WebhookAPI["Webhook API v1<br/>(/webhook/*)"]
         StaticRoutes["Static Routes<br/>(/ui, /health)"]
+        DashboardAPI["Dashboard API<br/>(/dashboard/*)"]
     end
 
     subgraph Core["Core Infrastructure (app/core/)"]
@@ -82,11 +84,13 @@ graph TB
         JWT["JWT Auth<br/>(jwt_auth.py)"]
         Logger["Logger<br/>(logger.py)"]
         Poller["Gmail Poller<br/>(gmail_poller.py)"]
+        DailyDigest["Daily Digest<br/>(daily_digest.py)"]
     end
 
     subgraph Agents["AI Agents (app/agents/)"]
         SpamFilter["Spam Filter<br/>(spam_filter.py)"]
         EmailAgent["Email Agent<br/>(email_agent.py)"]
+        EmailIntelAgent["Email Intelligence Agent<br/>(email_intelligence_agent.py)"]
         CalendarAgent["Calendar Agent<br/>(calendar_agent.py)"]
         ConflictAgent["Conflict Agent<br/>(conflict_agent.py)"]
         ChatAgent["Chat Agent<br/>(chat_agent.py)"]
@@ -108,6 +112,7 @@ graph TB
     ChatAPI --> JWT
     ChatAPI --> ChatAgent
     WebhookAPI --> Poller
+    DashboardAPI --> SQLite
 
     Poller --> Gmail
     Poller --> SpamFilter
@@ -117,19 +122,24 @@ graph TB
     Poller --> Logger
 
     EmailAgent --> OpenAI
+    Orchestrator --> EmailIntelAgent
     Orchestrator --> CalendarAgent
     Orchestrator --> ConflictAgent
     Orchestrator --> NotificationAgent
 
-    CalendarAgent --> Calendar
+    EmailIntelAgent --> OpenAI    CalendarAgent --> Calendar
     ConflictAgent --> Calendar
     NotificationAgent --> Gmail
     ChatAgent --> OpenAI
     ChatAgent --> Calendar
 
+    DailyDigest --> SQLite
+    DailyDigest --> NotificationAgent
+
     Logger --> SQLite
     ChatAPI --> SQLite
     Orchestrator --> SQLite
+    DashboardAPI --> SQLite
 
     EvaluationAgent --> ChatAgent
 ```
@@ -143,23 +153,23 @@ graph TB
 │                    PRESENTATION LAYER                        │
 │  ┌──────────────────────┐  ┌──────────────────────────────┐ │
 │  │   chat_ui.html       │  │  REST API Endpoints          │ │
-│  │   SPA (1623 lines)   │  │  15 routes across 4 groups   │ │
+│  │   SPA (1623+ lines)  │  │  17 routes across 4 groups   │ │
 │  └──────────────────────┘  └──────────────────────────────┘ │
 ├─────────────────────────────────────────────────────────────┤
 │                    APPLICATION LAYER                         │
 │  ┌──────────────────────────────────────────────────────┐   │
 │  │              Orchestrator (orchestrator.py)          │   │
-│  │         Routes email intents to agent pipelines      │   │
+│  │    Routes email intents to calendar/intelligence     │   │
 │  └──────────────────────────────────────────────────────┘   │
 │  ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐    │
-│  │Spam  │ │Email │ │Calen-│ │Conf- │ │Chat  │ │Notif-│    │
-│  │Filter│ │Agent │ │dar   │ │lict  │ │Agent │ │ication│   │
-│  │      │ │      │ │Agent │ │Agent │ │      │ │Agent │    │
+│  │Spam  │ │Email │ │Email │ │Calen-│ │Conf- │ │Notif-│    │
+│  │Filter│ │Agent │ │Intel │ │dar   │ │lict  │ │ication│   │
+│  │      │ │      │ │Agent │ │Agent │ │Agent │ │Agent │    │
 │  └──────┘ └──────┘ └──────┘ └──────┘ └──────┘ └──────┘    │
-│                    ┌──────────┐                             │
-│                    │Evaluation│                             │
-│                    │  Agent   │                             │
-│                    └──────────┘                             │
+│  ┌──────┐ ┌──────────┐ ┌──────────┐                        │
+│  │Chat  │ │Evaluation│ │Daily     │                        │
+│  │Agent │ │  Agent   │ │Digest    │                        │
+│  └──────┘ └──────────┘ └──────────┘                        │
 ├─────────────────────────────────────────────────────────────┤
 │                    INFRASTRUCTURE LAYER                      │
 │  ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐ ┌──────────┐ │
@@ -171,7 +181,7 @@ graph TB
 │  ┌──────────────────────────────────────────────────────┐   │
 │  │              SQLite Database (sqlite.py)              │   │
 │  │  system_logs | pending_invites | pending_cancels      │   │
-│  │  pending_reschedules | users                          │   │
+│  │  pending_reschedules | users | email_intelligence     │   │
 │  └──────────────────────────────────────────────────────┘   │
 ├─────────────────────────────────────────────────────────────┤
 │                    EXTERNAL SERVICES                         │
@@ -321,7 +331,7 @@ sequenceDiagram
                     Orchestrator->>NotifA: send_reply(email, result)
 
                 else intent = "other"
-                    Note over Orchestrator: No action
+                    Note over Orchestrator: No calendar action
                 end
 
                 Orchestrator-->>EvalA: pipeline_result
@@ -494,6 +504,18 @@ sequenceDiagram
     SQLite-->>FastAPI: {total_emails, meetings_scheduled, conflicts, ...}
     FastAPI-->>Browser: JSON stats object
 
+    Browser->>FastAPI: GET /dashboard/email-stats
+    FastAPI->>JWT: get_current_user()
+    FastAPI->>SQLite: get_email_statistics()
+    SQLite-->>FastAPI: {total, meeting, report, partnership, support, announcement, other}
+    FastAPI-->>Browser: JSON category stats
+
+    Browser->>FastAPI: GET /dashboard/recent-emails?limit=20&offset=0
+    FastAPI->>JWT: get_current_user()
+    FastAPI->>SQLite: get_recent_emails(limit=20, offset=0)
+    SQLite-->>FastAPI: [{sender, category, summary, importance_score, processed_at}, ...]
+    FastAPI-->>Browser: JSON array
+
     Browser->>FastAPI: GET /dashboard/logs?limit=50&offset=0
     FastAPI->>JWT: get_current_user()
     FastAPI->>SQLite: get_logs(limit=50, offset=0)
@@ -505,10 +527,10 @@ sequenceDiagram
 ```
 
 **Source files:**
-- `app/api/v1/chat.py:693` — dashboard_stats endpoint
-- `app/api/v1/chat.py:715` — dashboard_logs endpoint
+- `app/api/v1/chat.py` — dashboard_stats, dashboard_email_stats, dashboard_recent_emails, dashboard_logs endpoints
 - `app/db/sqlite.py:95-118` — get_stats()
 - `app/db/sqlite.py:55-64` — get_logs()
+- `app/db/sqlite.py` — get_email_statistics(), get_recent_emails()
 
 ### Flow 7: Reschedule Flow
 
@@ -552,11 +574,85 @@ sequenceDiagram
 - `app/agents/calendar_agent.py:197-301` — process_reschedule()
 - `app/agents/conflict_agent.py:93-154` — find_alternatives()
 
+### Flow 8: Email Intelligence Pipeline (Non-Calendar Emails)
+
+```mermaid
+sequenceDiagram
+    participant Poller as Gmail Poller
+    participant Spam as Spam Filter
+    participant EmailA as Email Agent
+    participant Orchestrator
+    participant IntelA as Email Intelligence Agent
+    participant OpenAI
+    participant SQLite
+
+    Note over Poller: Same poll → parse → spam check → mark_read flow as Flow 2
+
+    Poller->>EmailA: process_email(email)
+    EmailA->>OpenAI: GPT-4o intent classification
+    OpenAI-->>EmailA: {intent: "other", summary, ...}
+    EmailA-->>Orchestrator: email_result (intent not in schedule/cancel/reschedule/inquiry)
+
+    Note over Orchestrator: Intent is not calendar-related → route to Email Intelligence
+
+    Orchestrator->>IntelA: process_email(email)
+    IntelA->>OpenAI: GPT-4o (email_intelligence SYSTEM_PROMPT)
+    OpenAI-->>IntelA: JSON {category, importance_score, summary, extracted_data}
+    IntelA-->>Orchestrator: intelligence_result
+
+    Orchestrator->>SQLite: insert_email_analysis(email_id, sender, subject, category, summary, extracted_data, importance_score)
+    SQLite-->>Orchestrator: OK
+
+    Orchestrator->>SQLite: log_event("email_intelligence_agent", "analyzed", payload)
+```
+
+**Source files:**
+- `app/agents/email_intelligence_agent.py` — process_email() (GPT-4o, temperature=0, structured JSON)
+- `app/orchestrator/orchestrator.py` — run_pipeline() routing logic
+- `app/db/sqlite.py` — insert_email_analysis()
+
+### Flow 9: Daily Digest
+
+```mermaid
+sequenceDiagram
+    participant Scheduler as asyncio.create_task()
+    participant DailyDigest as Daily Digest (daily_digest.py)
+    participant SQLite
+    participant NotifA as Notification Agent
+    participant Gmail
+
+    Note over Scheduler: Runs at DIGEST_TIME (default 07:00) every morning
+
+    loop Daily at DIGEST_TIME
+        DailyDigest->>SQLite: get_email_statistics() (yesterday)
+        SQLite-->>DailyDigest: {total, meeting, report, partnership, support, announcement, other}
+
+        DailyDigest->>SQLite: get_recent_emails(limit=50, offset=0) (yesterday)
+        SQLite-->>DailyDigest: [emails sorted by importance_score DESC]
+
+        DailyDigest->>DailyDigest: Select top 3 most important emails
+        DailyDigest->>DailyDigest: Generate digest body:
+        Note over DailyDigest: "Good Morning! You received: 5 Reports, 2 Partnerships, 3 Support emails.\n\nTop important emails:\n1. ...\n2. ...\n3. ..."
+
+        DailyDigest->>NotifA: send_notification(email=DIGEST_EMAIL, email_result=digest_result, calendar_result=None, conflict_result=None)
+        NotifA->>Gmail: users().messages().send(raw=base64_email)
+        Gmail-->>NotifA: {id, threadId}
+
+        DailyDigest->>SQLite: log_event("daily_digest", "sent", payload)
+    end
+```
+
+**Source files:**
+- `app/core/daily_digest.py` — run_daily_digest() (async loop, waits until DIGEST_TIME)
+- `app/main.py` — asyncio.create_task(run_daily_digest()) at startup
+- `app/core/config.py` — DIGEST_TIME, DIGEST_EMAIL settings
+- `app/agents/notification_agent.py` — send_notification() reused for digest delivery
+
 ---
 
 ## 4. Request Lifecycle (API-Focused)
 
-### Email Processing Pipeline
+### Email Processing Pipeline (Updated)
 
 ```
 INCOMING EMAIL
@@ -598,13 +694,17 @@ INCOMING EMAIL
 ┌─────────────────────┐
 │ 6. Orchestrator     │  run_pipeline() — orchestrator.py
 │    Route by intent   │
-│    schedule → calendar_agent
-│    cancel   → calendar_agent
-│    reschedule → calendar_agent
-│    inquiry  → calendar query
-│    other    → skip
-│    conflict → conflict_agent
-│    always   → notification_agent
+│    ┌─────────────────┤
+│    │ schedule        │ → calendar_agent.process_schedule()
+│    │ cancel          │ → calendar_agent.process_cancel()
+│    │ reschedule      │ → calendar_agent.process_reschedule()
+│    │ inquiry         │ → calendar query
+│    │ other           │ → email_intelligence_agent.process_email()
+│    │                 │     ↓
+│    │                 │   insert_email_analysis() → SQLite
+│    │   if conflict   │ → conflict_agent.find_alternatives()
+│    │   always        │ → notification_agent.send_notification()
+│    └─────────────────┤
 └────────┬────────────┘
          │ pipeline_result
          ▼
@@ -670,20 +770,22 @@ stateDiagram-v2
 
 ## 6. Component Interaction Matrix
 
-| Component | Config | Auth | JWT | SQLite | Spam | Email | Cal | Conflict | Chat | Notif | Eval | Orchestrator | Poller | Gmail API | Cal API | OpenAI |
-|-----------|--------|------|-----|--------|------|-------|-----|---------|------|-------|------|-------------|--------|-----------|---------|--------|
-| **main.py** | ✓ | — | — | ✓ (init) | — | — | — | — | — | — | — | — | ✓ (start) | — | — | — |
-| **auth_router** | ✓ | ✓ | ✓ | ✓ | — | — | — | — | — | — | — | — | — | — | — | — |
-| **chat_router** | — | — | ✓ | ✓ | — | — | — | — | ✓ | — | — | — | — | — | — | — |
-| **webhook_router**| — | — | — | — | — | — | — | — | — | — | — | ✓ | — | — | — | — |
-| **gmail_poller** | ✓ | ✓ | — | ✓ | ✓ | — | — | — | — | — | ✓ | ✓ | — | ✓ | — | — |
-| **email_agent** | ✓ | — | — | — | — | — | — | — | — | — | — | — | — | — | — | ✓ |
-| **calendar_agent**| ✓ | ✓ | — | — | — | — | — | — | — | — | — | — | — | — | ✓ | — |
-| **conflict_agent**| — | ✓ (own) | — | — | — | — | — | — | — | — | — | — | — | — | ✓ | — |
-| **chat_agent** | ✓ | ✓ | — | — | — | — | — | — | — | — | — | — | — | — | ✓ | ✓ |
-| **notification_agent**| — | ✓ | — | — | — | — | — | — | — | — | — | — | — | ✓ | — | — |
-| **evaluation_agent**| — | — | — | ✓ | — | — | — | — | ✓ | — | — | — | — | — | — | — |
-| **orchestrator** | — | — | — | — | — | ✓ | ✓ | ✓ | — | ✓ | — | — | — | — | — | — |
+| Component | Config | Auth | JWT | SQLite | Spam | Email | EmailIntel | Cal | Conflict | Chat | Notif | Eval | Orchestrator | Poller | Gmail API | Cal API | OpenAI | DailyDigest |
+|-----------|--------|------|-----|--------|------|-------|-----------|-----|---------|------|-------|------|-------------|--------|-----------|---------|--------|-------------|
+| **main.py** | ✓ | — | — | ✓ (init) | — | — | — | — | — | — | — | — | — | ✓ (start) | — | — | — | ✓ (start) |
+| **auth_router** | ✓ | ✓ | ✓ | ✓ | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| **chat_router** | — | — | ✓ | ✓ | — | — | — | — | — | ✓ | — | — | — | — | — | — | — | — |
+| **webhook_router**| — | — | — | — | — | — | — | — | — | — | — | — | ✓ | — | — | — | — | — |
+| **gmail_poller** | ✓ | ✓ | — | ✓ | ✓ | — | — | — | — | — | — | ✓ | ✓ | — | ✓ | — | — | — |
+| **email_agent** | ✓ | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | ✓ | — |
+| **email_intel_agent** | ✓ | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | ✓ | — |
+| **calendar_agent**| ✓ | ✓ | — | — | — | — | — | — | — | — | — | — | — | — | — | ✓ | — | — |
+| **conflict_agent**| — | ✓ (own) | — | — | — | — | — | — | — | — | — | — | — | — | — | ✓ | — | — |
+| **chat_agent** | ✓ | ✓ | — | — | — | — | — | — | — | — | — | — | — | — | — | ✓ | ✓ | — |
+| **notification_agent**| — | ✓ | — | — | — | — | — | — | — | — | — | — | — | — | ✓ | — | — | — |
+| **evaluation_agent**| — | — | — | ✓ | — | — | — | — | — | ✓ | — | — | — | — | — | — | — | — |
+| **orchestrator** | — | — | — | ✓ | — | ✓ | ✓ | ✓ | ✓ | — | ✓ | — | — | — | — | — | — | — |
+| **daily_digest** | ✓ | — | — | ✓ | — | — | — | — | — | — | ✓ | — | — | — | ✓ | — | — | — |
 
 ✓ = Direct dependency/call | — = No interaction
 
@@ -693,26 +795,70 @@ stateDiagram-v2
 
 | File | Lines | Primary Role | Key Exports |
 |------|-------|-------------|-------------|
-| `app/main.py` | 68 | Entry point | FastAPI app, startup, routes |
-| `app/core/config.py` | ~50 | Configuration | `Settings` (Pydantic BaseSettings) |
+| `app/main.py` | ~85 | Entry point | FastAPI app, startup (init_db + poll_gmail + daily_digest), routes |
+| `app/core/config.py` | ~60 | Configuration | `Settings` (Pydantic BaseSettings) |
 | `app/core/auth.py` | 84 | Google OAuth | `get_gmail_service()`, `get_calendar_service()` |
 | `app/core/jwt_auth.py` | 78 | JWT operations | `create_token()`, `decode_token()`, `get_current_user()` |
 | `app/core/logger.py` | ~30 | Event logging | `log_event()` |
 | `app/core/gmail_poller.py` | 143 | Email ingestion | `poll_gmail()` |
+| `app/core/daily_digest.py` | ~120 | Daily digest job | `run_daily_digest()` |
 | `app/api/v1/auth.py` | ~252 | User auth | `google_auth_url()`, `callback()`, `me()`, `logout()` |
-| `app/api/v1/chat.py` | ~750 | Chat + dashboard | `chat()`, 6 confirmation endpoints, `dashboard_stats()`, `dashboard_logs()` |
+| `app/api/v1/chat.py` | ~800 | Chat + dashboard | `chat()`, 6 confirmation endpoints, `dashboard_stats()`, `dashboard_email_stats()`, `dashboard_recent_emails()`, `dashboard_logs()` |
 | `app/api/v1/webhook.py` | ~30 | Webhook | `gmail_webhook()` |
 | `app/agents/spam_filter.py` | ~120 | Spam detection | `is_spam()` |
 | `app/agents/email_agent.py` | ~140 | Intent classification | `process_email()` |
+| `app/agents/email_intelligence_agent.py` | ~225 | Email intelligence | `process_email()` — classifies non-calendar emails, generates summaries, extracts structured data |
 | `app/agents/calendar_agent.py` | 301 | Calendar operations | `process_schedule()`, `process_cancel()`, `process_reschedule()` |
 | `app/agents/conflict_agent.py` | ~175 | Alternative slots | `find_alternatives()` |
 | `app/agents/chat_agent.py` | ~200 | Chat interaction | `chat()`, `evaluate_email()` |
-| `app/agents/notification_agent.py` | ~380 | Email reply | `send_notification()`, `send_reply()` |
+| `app/agents/notification_agent.py` | ~380 | Email reply | `send_notification()`, `send_reply()` — also used for daily digest delivery |
 | `app/agents/evaluation_agent.py` | ~120 | Quality evaluation | `evaluate_and_retry()` |
-| `app/orchestrator/orchestrator.py` | ~150 | Pipeline routing | `run_pipeline()` |
-| `app/db/sqlite.py` | 118 | Database layer | `init_db()`, `get_logs()`, `get_stats()`, user + pending CRUD |
+| `app/orchestrator/orchestrator.py` | ~200 | Pipeline routing | `run_pipeline()` — routes calendar emails to calendar workflow, non-calendar emails to Email Intelligence Agent |
+| `app/db/sqlite.py` | ~250 | Database layer | `init_db()`, `get_logs()`, `get_stats()`, user + pending CRUD, `insert_email_analysis()`, `get_email_analysis()`, `get_email_statistics()`, `get_recent_emails()` |
 | `app/schemas/email.py` | ~20 | Data models | `EmailSchema` |
-| `app/chat_ui.html` | 1623 | Frontend SPA | Chat UI + Dashboard (vanilla JS) |
+| `app/chat_ui.html` | 1623+ | Frontend SPA | Chat UI + Dashboard (vanilla JS) |
+
+### Database Tables
+
+| Table | Purpose | Key Columns |
+|-------|---------|-------------|
+| `system_logs` | Event audit trail | id, agent, status, payload, timestamp |
+| `pending_invites` | Pending confirmations | id, token, email, event_id, event_data, timestamp |
+| `pending_cancels` | Pending cancellations | id, token, email, event_id, event_data, timestamp |
+| `pending_reschedules` | Pending reschedules | id, token, email, event_id, event_data, timestamp |
+| `users` | User accounts | id, user_id, email, name, picture, access_token, refresh_token, token_expiry, created_at |
+| `email_intelligence` (NEW) | Email analytics | id, email_id, sender, subject, category, summary, extracted_data_json, importance_score, processed_at |
+
+### Agent Summary
+
+| Agent | File | LLM | Purpose |
+|-------|------|-----|---------|
+| Spam Filter | `spam_filter.py` | No | Rule-based spam detection |
+| Email Agent | `email_agent.py` | GPT-4o | Intent classification (schedule/cancel/reschedule/inquiry/other) |
+| **Email Intelligence Agent** (NEW) | `email_intelligence_agent.py` | GPT-4o | Classify non-calendar emails, generate summaries, extract structured data |
+| Calendar Agent | `calendar_agent.py` | No | Calendar CRUD operations |
+| Conflict Agent | `conflict_agent.py` | No | Find alternative time slots |
+| Chat Agent | `chat_agent.py` | GPT-4o | Interactive chat scheduling |
+| Notification Agent | `notification_agent.py` | No | Send email replies + daily digest |
+| Evaluation Agent | `evaluation_agent.py` | GPT-4o (via Chat) | Quality evaluation with retry |
+
+### API Endpoints (17 total)
+
+| # | Route | Method | Auth | Purpose |
+|---|-------|--------|------|---------|
+| 1 | `/health` | GET | None | Health check |
+| 2 | `/ui` | GET | None | Serve chat UI HTML |
+| 3 | `/auth/login` | GET | None | Google OAuth redirect |
+| 4 | `/auth/callback` | GET | None (state) | OAuth callback |
+| 5 | `/auth/me` | GET | JWT cookie | Current user info |
+| 6 | `/auth/logout` | POST | None | Clear cookie |
+| 7 | `/chat` | POST | JWT cookie | Interactive chat |
+| 8-12 | `/chat/{confirm,decline,reschedule/confirm,reschedule/decline,cancel/confirm}/{token}` | GET | Token | Action links (5 endpoints) |
+| 13 | `/dashboard/stats` | GET | JWT cookie | System statistics |
+| 14 | `/dashboard/logs` | GET | JWT cookie | Event logs (paginated) |
+| 15 | `/dashboard/email-stats` (NEW) | GET | JWT cookie | Email category statistics |
+| 16 | `/dashboard/recent-emails` (NEW) | GET | JWT cookie | Recent analyzed emails |
+| 17 | `/webhook/gmail` | POST | None | Gmail push notification |
 
 ---
 

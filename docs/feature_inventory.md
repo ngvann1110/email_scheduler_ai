@@ -86,7 +86,19 @@
 | Vietnamese Day Labels | ✅ | `_label()` | `agents/conflict_agent.py:28-30` | N/A |
 | Duplicate Auth | ⚠️ | `_get_service()` | `agents/conflict_agent.py:33-46` — duplicate of `core/auth.py` | N/A |
 
-### F. Notification Emails
+### F. Email Intelligence
+
+| Feature | Status | Entry Point | Backend Components | Frontend Components |
+|---------|--------|-------------|-------------------|-------------------|
+| Non-Calendar Email Classification | ✅ | Pipeline | `agents/email_intelligence_agent.py:process_email()` — GPT-4o | N/A |
+| Email Category Labels (6) | ✅ | Classification | Meeting, Report, Partnership, Support, Announcement, Other | N/A |
+| Email Summarization (Vietnamese) | ✅ | Classification | 3-5 bullet, max 100 words, key facts preserved | N/A |
+| Information Extraction | ✅ | Classification | Deadlines, owners, projects, meeting requests, amounts, URLs as JSON | N/A |
+| Importance Scoring (0-100) | ✅ | Classification | GPT-4o determined importance score | N/A |
+| Intelligence Storage | ✅ | Pipeline | `db/sqlite.py:insert_email_analysis()` — `email_intelligence` table | N/A |
+| Fallback on Error | ✅ | Try/except | `agents/email_intelligence_agent.py:_fallback()` — category="Other", importance=0 | N/A |
+
+### G. Notification Emails
 
 | Feature | Status | Entry Point | Backend Components | Frontend Components |
 |---------|--------|-------------|-------------------|-------------------|
@@ -101,7 +113,17 @@
 | UTF-8 Vietnamese Content | ✅ | All templates | Unicode box-drawing + Vietnamese text | N/A |
 | Email Threading | ❌ | N/A | No `In-Reply-To` or `References` headers | N/A |
 
-### G. Evaluation & Retry
+### H. Daily Digest
+
+| Feature | Status | Entry Point | Backend Components | Frontend Components |
+|---------|--------|-------------|-------------------|-------------------|
+| Scheduled Daily Digest | ✅ | Startup `asyncio.create_task` | `core/daily_digest.py:run_daily_digest()` — waits until DIGEST_TIME | N/A |
+| Category Aggregation | ✅ | Digest generation | `db/sqlite.py:get_email_statistics()` — counts by category | N/A |
+| Top 3 Important Emails | ✅ | Digest generation | `db/sqlite.py:get_recent_emails()` — sorted by importance DESC | N/A |
+| Digest Email Sending | ✅ | Reuses Notification Agent | `agents/notification_agent.py:send_reply()` — sends digest email | N/A |
+| Vietnamese Morning Greeting | ✅ | Digest template | `core/daily_digest.py:_build_digest_content()` | N/A |
+
+### I. Evaluation & Retry
 
 | Feature | Status | Entry Point | Backend Components | Frontend Components |
 |---------|--------|-------------|-------------------|-------------------|
@@ -227,7 +249,9 @@
 | 12 | `/chat/cancel/confirm/{token}` | GET | Token | Confirm cancel | `chat.py:639` | ✅ |
 | 13 | `/dashboard/stats` | GET | JWT | Statistics | `chat.py:693` | ✅ |
 | 14 | `/dashboard/logs` | GET | JWT | Logs | `chat.py:715` | ✅ |
-| 15 | `/webhook/gmail` | POST | None | Gmail push | `webhook.py:9` | ✅ |
+| 15 | `/dashboard/email-stats` | GET | JWT | Email category statistics | `chat.py:dashboard_email_stats` | ✅ |
+| 16 | `/dashboard/recent-emails` | GET | JWT | Recent analyzed emails (paginated, sortable) | `chat.py:dashboard_recent_emails` | ✅ |
+| 17 | `/webhook/gmail` | POST | None | Gmail push | `webhook.py:9` | ✅ |
 
 ---
 
@@ -242,6 +266,7 @@
 | Chat Agent | `agents/chat_agent.py` | `chat()`, `evaluate_email()` | GPT-4o | Calendar v3 (query) | ✅ |
 | Notification Agent | `agents/notification_agent.py` | `send_notification()`, `send_reply()` | No | Gmail v1 | ✅ |
 | Evaluation Agent | `agents/evaluation_agent.py` | `evaluate_and_retry()` | Via chat_agent | No | ✅ |
+| Email Intelligence Agent | `agents/email_intelligence_agent.py` | `process_email()` | GPT-4o | No | ✅ |
 
 ---
 
@@ -254,7 +279,9 @@
 | AI Intent Classification | 8 | 8 | 0 | 0 |
 | Calendar Operations | 15 | 13 | 2 | 1 |
 | Conflict Resolution | 8 | 7 | 1 | 0 |
+| Email Intelligence | 7 | 7 | 0 | 0 |
 | Notification Emails | 10 | 9 | 0 | 1 |
+| Daily Digest | 5 | 5 | 0 | 0 |
 | Evaluation & Retry | 5 | 5 | 0 | 0 |
 | Authentication | 12 | 9 | 0 | 3 |
 | Chat UI | 14 | 13 | 0 | 1 |
@@ -262,9 +289,9 @@
 | Database | 9 | 7 | 0 | 2 |
 | Infrastructure | 6 | 5 | 0 | 1 |
 | Testing | 8 | 7 | 0 | 1 |
-| **TOTAL** | **115** | **101** | **3** | **11** |
+| **TOTAL** | **127** | **113** | **3** | **11** |
 
-**Implementation rate: 87.8% (101/115)**
+**Implementation rate: 89.0% (113/127)**
 
 ---
 
