@@ -8,6 +8,12 @@ Tests:
 - get_logs() — filtering, pagination, search, date range
 """
 
+from app.db.sqlite import (
+    insert_email_analysis,
+    get_email_analysis,
+    get_email_statistics,
+    get_recent_emails,
+)
 import json
 import sqlite3
 
@@ -200,3 +206,218 @@ class TestGetLogs:
         # Should be parseable as JSON
         parsed = json.loads(payload)
         assert isinstance(parsed, dict)
+
+
+# ── Email Intelligence CRUD tests ──────────────────────────────────────────────
+
+
+class TestInsertEmailAnalysis:
+    """Tests for insert_email_analysis()."""
+
+    def test_insert_returns_int_id(self, db_connection):
+        """insert_email_analysis should return an integer id."""
+        new_id = insert_email_analysis(
+            email_id="msg-001",
+            sender="partner@example.com",
+            subject="Hợp tác dự án AI",
+            category="partnership",
+            summary="- Cơ hội hợp tác phát triển AI\n- Dự kiến ký MOU tháng 7",
+            extracted_data_json='{"project":"AI Platform"}',
+            importance_score=85,
+        )
+        assert isinstance(new_id, int)
+        assert new_id > 0
+
+    def test_insert_minimal_fields(self, db_connection):
+        """Insert with only required fields should succeed."""
+        new_id = insert_email_analysis(
+            email_id=None,
+            sender="anon@test.com",
+            subject=None,
+            category="other",
+            summary=None,
+        )
+        assert isinstance(new_id, int)
+        assert new_id > 0
+
+    def test_insert_default_values(self, db_connection):
+        """Default summary/score should be stored correctly."""
+        new_id = insert_email_analysis(
+            email_id="msg-defaults",
+            sender="test@test.com",
+            subject="Test defaults",
+            category="announcement",
+            summary=None,
+        )
+        record = get_email_analysis(new_id)
+        assert record is not None
+        assert record["summary"] is None
+        assert record["extracted_data_json"] == "{}"
+        assert record["importance_score"] == 50
+
+
+class TestGetEmailAnalysis:
+    """Tests for get_email_analysis()."""
+
+    def test_get_existing_record(self, db_connection):
+        """Should return full record dict for a valid id."""
+        new_id = insert_email_analysis(
+            email_id="msg-002",
+            sender="report@corp.com",
+            subject="Báo cáo Q1",
+            category="report",
+            summary="- Doanh thu tăng 15%\n- Chi phí giảm 5%",
+            extracted_data_json='{"deadline":"2026-04-15"}',
+            importance_score=72,
+        )
+        record = get_email_analysis(new_id)
+        assert record is not None
+        assert record["email_id"] == "msg-002"
+        assert record["sender"] == "report@corp.com"
+        assert record["subject"] == "Báo cáo Q1"
+        assert record["category"] == "report"
+        assert record["summary"] == "- Doanh thu tăng 15%\n- Chi phí giảm 5%"
+        assert record["extracted_data_json"] == '{"deadline":"2026-04-15"}'
+        assert record["importance_score"] == 72
+        assert record["processed_at"] is not None
+
+    def test_get_nonexistent_record(self, db_connection):
+        """Should return None for invalid id."""
+        record = get_email_analysis(99999)
+        assert record is None
+
+    def test_all_keys_present(self, db_connection):
+        """Returned dict should have all expected keys."""
+        new_id = insert_email_analysis(
+            email_id="msg-keys",
+            sender="keys@test.com",
+            subject="Key check",
+            category="other",
+            summary=None,
+        )
+        record = get_email_analysis(new_id)
+        expected_keys = {
+            "id", "email_id", "sender", "subject", "category",
+            "summary", "extracted_data_json", "importance_score", "processed_at",
+        }
+        assert set(record.keys()) == expected_keys
+
+
+class TestGetEmailStatistics:
+    """Tests for get_email_statistics()."""
+
+    def test_stats_empty_table(self, db_connection):
+        """When table is empty (after clearing), all counts should be 0."""
+        # Insert nothing additional; but we must account for other tests' inserts
+        stats = get_email_statistics()
+        # All keys should be present
+        assert "total" in stats
+        assert "meeting" in stats
+        assert "report" in stats
+        assert "partnership" in stats
+        assert "support" in stats
+        assert "announcement" in stats
+        assert "other" in stats
+        # total should equal sum of categories
+        expected_total = (
+            stats["meeting"]
+            + stats["report"]
+            + stats["partnership"]
+            + stats["support"]
+            + stats["announcement"]
+            + stats["other"]
+        )
+        assert stats["total"] == expected_total
+
+    def test_stats_after_inserts(self, db_connection):
+        """Stats should reflect inserted records."""
+        insert_email_analysis(
+            email_id="stats-1", sender="s1@t.com", subject="S1",
+            category="report", summary=None, importance_score=60,
+        )
+        insert_email_analysis(
+            email_id="stats-2", sender="s2@t.com", subject="S2",
+            category="report", summary=None, importance_score=70,
+        )
+        insert_email_analysis(
+            email_id="stats-3", sender="s3@t.com", subject="S3",
+            category="support", summary=None, importance_score=30,
+        )
+        stats = get_email_statistics()
+        assert stats["report"] >= 2
+        assert stats["support"] >= 1
+        assert stats["total"] >= 3
+
+    def test_stats_type(self, db_connection):
+        """All stat values should be integers."""
+        stats = get_email_statistics()
+        for k, v in stats.items():
+            assert isinstance(v, int), f"{k} should be int, got {type(v)}"
+
+
+class TestGetRecentEmails:
+    """Tests for get_recent_emails()."""
+
+    def test_returns_dict_with_correct_keys(self, db_connection):
+        """Should return dict with items, total, page, page_size."""
+        result = get_recent_emails()
+        assert "items" in result
+        assert "total" in result
+        assert "page" in result
+        assert "page_size" in result
+        assert isinstance(result["items"], list)
+        assert isinstance(result["total"], int)
+        assert result["page"] == 1
+        assert result["page_size"] == 20
+
+    def test_pagination_first_page(self, db_connection):
+        """First page should have no more than page_size items."""
+        result = get_recent_emails(page=1, page_size=3)
+        assert len(result["items"]) <= 3
+
+    def test_sort_by_importance(self, db_connection):
+        """When sort_by='importance', items should be in descending importance order."""
+        insert_email_analysis(
+            email_id="sort-low", sender="low@t.com", subject="Low",
+            category="other", summary=None, importance_score=10,
+        )
+        insert_email_analysis(
+            email_id="sort-high", sender="high@t.com", subject="High",
+            category="announcement", summary=None, importance_score=99,
+        )
+        result = get_recent_emails(sort_by="importance", page_size=5)
+        items = result["items"]
+        scores = [item["importance_score"] for item in items]
+        assert scores == sorted(
+            scores, reverse=True), f"Scores not sorted DESC: {scores}"
+
+    def test_default_sort_is_processed_at(self, db_connection):
+        """Default sort should be by processed_at DESC."""
+        result = get_recent_emails(page_size=5)
+        items = result["items"]
+        if len(items) >= 2:
+            # processed_at should be descending (newest first)
+            timestamps = [item["processed_at"] for item in items]
+            assert timestamps == sorted(timestamps, reverse=True), \
+                f"Timestamps not sorted DESC: {timestamps}"
+
+    def test_item_structure(self, db_connection):
+        """Each item should have all expected fields."""
+        insert_email_analysis(
+            email_id="struct-test", sender="struct@t.com", subject="Structure",
+            category="meeting",
+            summary="- Test summary",
+            extracted_data_json='{"meeting_date":"2026-07-01"}',
+            importance_score=50,
+        )
+        result = get_recent_emails(page_size=1)
+        item = result["items"][0]
+        assert "id" in item
+        assert "email_id" in item
+        assert "sender" in item
+        assert "subject" in item
+        assert "category" in item
+        assert "summary" in item
+        assert "extracted_data_json" in item
+        assert "importance_score" in item
+        assert "processed_at" in item

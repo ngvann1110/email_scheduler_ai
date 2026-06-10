@@ -2,31 +2,121 @@
 Integration tests for app/core/gmail_poller.py
 
 Tests:
+- _parse_date_header() — RFC 2822 to ISO 8601 conversion
 - _parse_message() — email parsing from raw Gmail API response
 - _mark_as_read() — marking messages as read
 - poll_gmail() — main polling loop (with mocked Gmail API)
 """
 
 import asyncio
+from datetime import datetime, timezone
+from email import message_from_bytes
 from unittest.mock import MagicMock, patch, AsyncMock
 
 import pytest
 
-from app.core.gmail_poller import _parse_message, _mark_as_read
+from app.core.gmail_poller import _parse_date_header, _parse_message, _mark_as_read
+
+
+def _make_mail(date_value: str | None) -> object:
+    """Build a minimal email.message.Message with an optional Date header."""
+    from email.mime.text import MIMEText
+    msg = MIMEText("test body")
+    msg["From"] = "sender@example.com"
+    msg["Subject"] = "Test"
+    if date_value is not None:
+        msg["Date"] = date_value
+    return msg
+
+
+class TestParseDateHeader:
+    """Tests for _parse_date_header() — Gmail Date header → ISO 8601."""
+
+    # ── Case 1: real-world Gmail RFC 2822 with +0700 offset ──────────────────
+    def test_real_gmail_date_with_plus0700(self):
+        """Thu, 11 Jun 2026 00:24:18 +0700 → ISO 8601 with correct offset."""
+        mail = _make_mail("Thu, 11 Jun 2026 00:24:18 +0700")
+        result = _parse_date_header(mail)
+        # parsedate_to_datetime returns offset-aware datetime; isoformat preserves offset
+        assert result == "2026-06-11T00:24:18+07:00"
+
+    # ── Case 2: RFC 2822 with +0000 (UTC) ────────────────────────────────────
+    def test_rfc2822_with_utc(self):
+        """Mon, 01 Jan 2025 12:30:00 +0000 → ISO 8601 UTC."""
+        mail = _make_mail("Mon, 01 Jan 2025 12:30:00 +0000")
+        result = _parse_date_header(mail)
+        assert result == "2025-01-01T12:30:00+00:00"
+
+    # ── Case 3: missing Date header ─────────────────────────────────────────
+    def test_missing_date_header(self):
+        """Missing Date → fallback to current UTC time (non-empty ISO string)."""
+        mail = _make_mail(None)
+        # Remove the Date header entirely if present
+        if "Date" in mail:
+            del mail["Date"]
+        result = _parse_date_header(mail)
+        # Should be a valid ISO 8601 string
+        dt = datetime.fromisoformat(result)
+        assert dt.tzinfo is not None  # timezone-aware
+        # Should be close to now (within 2 seconds)
+        delta = abs((dt - datetime.now(timezone.utc)).total_seconds())
+        assert delta < 2
+
+    def test_empty_date_header(self):
+        """Empty Date string → fallback to current UTC time."""
+        mail = _make_mail("")
+        result = _parse_date_header(mail)
+        dt = datetime.fromisoformat(result)
+        assert dt.tzinfo is not None
+        delta = abs((dt - datetime.now(timezone.utc)).total_seconds())
+        assert delta < 2
+
+    # ── Case 4: invalid / unparseable Date header ────────────────────────────
+    def test_invalid_date_header(self):
+        """'invalid-date' → no crash, fallback ISO timestamp generated."""
+        mail = _make_mail("invalid-date")
+        result = _parse_date_header(mail)
+        dt = datetime.fromisoformat(result)
+        assert dt.tzinfo is not None
+        delta = abs((dt - datetime.now(timezone.utc)).total_seconds())
+        assert delta < 2
+
+    def test_garbled_date_header(self):
+        """'not-a-real-date!!' → no crash, fallback ISO timestamp generated."""
+        mail = _make_mail("not-a-real-date!!")
+        result = _parse_date_header(mail)
+        dt = datetime.fromisoformat(result)
+        assert dt.tzinfo is not None
+
+    # ── Case 5: output must pass EmailSchema validation ──────────────────────
+    def test_output_passes_email_schema(self):
+        """ISO string from _parse_date_header must validate in EmailSchema."""
+        from app.schemas.email import EmailSchema
+        mail = _make_mail("Thu, 11 Jun 2026 00:24:18 +0700")
+        iso = _parse_date_header(mail)
+        email_obj = EmailSchema(
+            sender="test@example.com",
+            subject="Test",
+            body="body",
+            timestamp=iso,
+        )
+        assert email_obj.timestamp == "2026-06-11T00:24:18+07:00"
 
 
 class TestParseMessage:
     """Tests for _parse_message()."""
 
     def test_parse_success(self, mock_gmail_service):
-        """Should parse a raw Gmail message into a dict."""
-        # The mock returns base64 encoded content
+        """Should parse a raw Gmail message into a dict with ISO 8601 timestamp."""
         result = _parse_message(mock_gmail_service, "msg_001")
         assert result is not None
         assert "sender" in result
         assert "subject" in result
         assert "body" in result
         assert "timestamp" in result
+        # Verify timestamp is now ISO 8601 (not raw RFC 2822)
+        dt = datetime.fromisoformat(result["timestamp"])
+        assert dt.tzinfo is not None
 
     def test_parse_failure_returns_none(self, mock_gmail_service):
         """Should return None when parsing fails."""

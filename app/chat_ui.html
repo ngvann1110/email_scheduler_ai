@@ -710,6 +710,75 @@
             color: #dc2626;
         }
 
+        /* Email Intelligence Stats */
+        .email-stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 10px;
+            margin-top: 16px;
+        }
+
+        .email-stat-card {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+            border: 2px solid var(--border);
+            border-radius: 14px;
+            padding: 14px 12px;
+            text-align: center;
+            transition: all 0.2s;
+            box-shadow: 0 3px 12px rgba(59, 130, 246, 0.08);
+        }
+
+        .email-stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(59, 130, 246, 0.15);
+        }
+
+        .email-stat-card .stat-icon {
+            font-size: 24px;
+            margin-bottom: 4px;
+            display: block;
+        }
+
+        .email-stat-card .stat-value {
+            font-family: 'Quicksand', sans-serif;
+            font-size: 24px;
+            font-weight: 800;
+            color: var(--accent);
+            line-height: 1.2;
+        }
+
+        .email-stat-card .stat-label {
+            font-size: 11px;
+            color: var(--muted);
+            font-weight: 600;
+            margin-top: 2px;
+        }
+
+        .email-stat-card.meeting .stat-value {
+            color: #2563eb;
+        }
+
+        .email-stat-card.report .stat-value {
+            color: #7c3aed;
+        }
+
+        .email-stat-card.partnership .stat-value {
+            color: #059669;
+        }
+
+        .email-stat-card.support .stat-value {
+            color: #d97706;
+        }
+
+        .email-stat-card.announcement .stat-value {
+            color: #dc2626;
+        }
+
+        .email-stat-card.other .stat-value {
+            color: #6b7280;
+        }
+
         /* Section cards */
         .section-card {
             background: rgba(255, 255, 255, 0.85);
@@ -1127,6 +1196,7 @@
                 <p>Hãy nói chuyện với tôi để đặt lịch họp, kiểm tra lịch trống, hoặc huỷ / dời lịch một cách dễ dàng.
                 </p>
                 <div class="quick-actions">
+                    <button class="quick-btn" onclick="summarizeNewEmails()">📬 Tổng hợp email mới</button>
                     <button class="quick-btn" onclick="quickSend('Tôi muốn đặt lịch họp')">📅 Đặt lịch họp</button>
                     <button class="quick-btn" onclick="quickSend('Lịch của tôi tuần này thế nào?')">📋 Xem lịch</button>
                     <button class="quick-btn" onclick="quickSend('Tôi muốn dời lịch họp')">🔄 Dời lịch</button>
@@ -1177,6 +1247,48 @@
                     <span class="stat-icon">❌</span>
                     <div class="stat-value" id="statError">0</div>
                     <div class="stat-label">Lỗi</div>
+                </div>
+            </div>
+
+            <!-- Email Intelligence Stats -->
+            <div class="section-card" id="emailStatsSection" style="display:none;">
+                <h3>📬 Email mới từ lần xem Dashboard gần nhất</h3>
+                <div class="email-stats-grid">
+                    <div class="email-stat-card">
+                        <span class="stat-icon">📬</span>
+                        <div class="stat-value" id="emailStatTotal">0</div>
+                        <div class="stat-label">Tổng Email mới</div>
+                    </div>
+                    <div class="email-stat-card meeting">
+                        <span class="stat-icon">📅</span>
+                        <div class="stat-value" id="emailStatMeeting">0</div>
+                        <div class="stat-label">Meeting</div>
+                    </div>
+                    <div class="email-stat-card report">
+                        <span class="stat-icon">📄</span>
+                        <div class="stat-value" id="emailStatReport">0</div>
+                        <div class="stat-label">Report</div>
+                    </div>
+                    <div class="email-stat-card partnership">
+                        <span class="stat-icon">🤝</span>
+                        <div class="stat-value" id="emailStatPartnership">0</div>
+                        <div class="stat-label">Partnership</div>
+                    </div>
+                    <div class="email-stat-card support">
+                        <span class="stat-icon">🛟</span>
+                        <div class="stat-value" id="emailStatSupport">0</div>
+                        <div class="stat-label">Support</div>
+                    </div>
+                    <div class="email-stat-card announcement">
+                        <span class="stat-icon">📢</span>
+                        <div class="stat-value" id="emailStatAnnouncement">0</div>
+                        <div class="stat-label">Announcement</div>
+                    </div>
+                    <div class="email-stat-card other">
+                        <span class="stat-icon">📋</span>
+                        <div class="stat-value" id="emailStatOther">0</div>
+                        <div class="stat-label">Other</div>
+                    </div>
                 </div>
             </div>
 
@@ -1313,6 +1425,68 @@
         function quickSend(text) {
             document.getElementById('input').value = text;
             sendMessage();
+        }
+
+        async function summarizeNewEmails() {
+            try {
+                const res = await fetch(`${API}/dashboard/recent-emails`, { credentials: 'include' });
+                if (res.status === 401) {
+                    addMessage('bot', '⚠️ Vui lòng đăng nhập để sử dụng trợ lý.');
+                    return;
+                }
+                const data = await res.json();
+                const emails = data.emails || [];
+                if (emails.length === 0) {
+                    addMessage('user', '📬 Tổng hợp email mới');
+                    addMessage('bot', '📬 Không có email mới kể từ lần xem Dashboard gần nhất.');
+                    return;
+                }
+                const text = 'Tổng hợp các email mới từ lần xem Dashboard gần nhất';
+                document.getElementById('input').value = text;
+                sendMessageWithEmails(emails);
+            } catch (err) {
+                addMessage('user', '📬 Tổng hợp email mới');
+                addMessage('bot', '⚠️ Không thể kết nối đến server. Vui lòng kiểm tra server đang chạy.');
+            }
+        }
+
+        async function sendMessageWithEmails(emails) {
+            const input = document.getElementById('input');
+            const text = input.value.trim();
+            if (!text) return;
+
+            input.value = '';
+            input.style.height = 'auto';
+
+            addMessage('user', text);
+            messages.push({ role: 'user', content: text });
+            addTyping();
+
+            try {
+                const res = await fetch(`${API}/chat`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ messages, session_id: sessionId, emails: emails }),
+                });
+                if (res.status === 401) {
+                    removeTyping();
+                    addMessage('bot', '⚠️ Vui lòng đăng nhập để sử dụng trợ lý.');
+                    currentUser = null;
+                    document.getElementById('loginScreen').style.display = 'flex';
+                    document.getElementById('appContainer').style.display = 'none';
+                    renderAuthBar();
+                    return;
+                }
+                const data = await res.json();
+                removeTyping();
+                sessionId = data.session_id || sessionId;
+                addMessage('bot', data.reply, data.action);
+                messages.push({ role: 'assistant', content: data.reply });
+            } catch (err) {
+                removeTyping();
+                addMessage('bot', '⚠️ Không thể kết nối đến server. Vui lòng kiểm tra server đang chạy.');
+            }
         }
 
         function addMessage(role, content, action = null) {
@@ -1455,16 +1629,16 @@
                     inputArea.style.display = 'none';
                     dashboard.style.display = 'flex';
                     dashboard.classList.add('visible');
-                    loadDashboard();
-                    // Auto-refresh every 30 seconds
+                    loadDashboard(true);  // Initial load -> track view
+                    // Auto-refresh every 30 seconds (no view tracking)
                     if (dashboardState.refreshInterval) clearInterval(dashboardState.refreshInterval);
-                    dashboardState.refreshInterval = setInterval(loadDashboard, 30000);
+                    dashboardState.refreshInterval = setInterval(() => loadDashboard(false), 30000);
                 }
             });
         });
 
-        async function loadDashboard() {
-            await Promise.all([fetchDashboardStats(), fetchDashboardLogs()]);
+        async function loadDashboard(trackView = false) {
+            await Promise.all([fetchDashboardStats(), fetchDashboardLogs(), fetchEmailStats(trackView)]);
         }
 
         async function fetchDashboardStats() {
@@ -1514,6 +1688,28 @@
                 }
             } catch (err) {
                 console.error('Dashboard stats error:', err);
+            }
+        }
+
+
+        async function fetchEmailStats(trackView = false) {
+            try {
+                const url = new URL(`${API}/dashboard/email-stats`);
+                if (trackView) url.searchParams.set('track_view', 'true');
+                const res = await fetch(url.toString(), { credentials: 'include' });
+                if (res.status === 401) return;
+                const data = await res.json();
+
+                document.getElementById('emailStatsSection').style.display = 'block';
+                document.getElementById('emailStatTotal').textContent = data.total || 0;
+                document.getElementById('emailStatMeeting').textContent = data.meeting || 0;
+                document.getElementById('emailStatReport').textContent = data.report || 0;
+                document.getElementById('emailStatPartnership').textContent = data.partnership || 0;
+                document.getElementById('emailStatSupport').textContent = data.support || 0;
+                document.getElementById('emailStatAnnouncement').textContent = data.announcement || 0;
+                document.getElementById('emailStatOther').textContent = data.other || 0;
+            } catch (err) {
+                console.error('Email stats error:', err);
             }
         }
 

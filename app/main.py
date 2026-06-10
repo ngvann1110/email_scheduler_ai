@@ -9,6 +9,7 @@ from fastapi.responses import FileResponse
 from app.core.config import settings
 from app.db.sqlite import init_db
 from app.core.gmail_poller import poll_gmail
+from app.core.daily_digest import run_daily_digest
 from app.api.v1.auth import router as auth_router
 from app.api.v1.chat import router as chat_router
 from app.api.v1.webhook import router as webhook_router
@@ -52,6 +53,7 @@ app.include_router(chat_router)
 async def startup_event():
     logger.info("[Main] Server khởi động, bắt đầu Gmail Poller...")
     asyncio.create_task(poll_gmail())
+    asyncio.create_task(run_daily_digest())
 
 
 @app.get("/ui")

@@ -31,6 +31,7 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     messages:   list[ChatMessage]
     session_id: str = ""
+    emails:     list[dict] | None = None
 
 
 class ChatResponse(BaseModel):
@@ -335,10 +336,119 @@ def _save_pending_cancel(token: str, action: dict):
     conn.close()
 
 
+def _build_email_summary_prompt(emails: list[dict]) -> str:
+    """
+    Build a structured email summary prompt from raw email data.
+    Groups emails by category and formats them for the AI.
+    """
+    if not emails:
+        return "Không có email mới nào."
+
+    count = len(emails)
+
+    # Group by category
+    categories = {
+        "important": [],
+        "need_action": [],
+        "informational": [],
+        "other": [],
+    }
+
+    category_map = {
+        "meeting": "important",
+        "report": "need_action",
+        "partnership": "important",
+        "support": "need_action",
+        "announcement": "informational",
+    }
+
+    for email in emails:
+        cat = email.get("category", "other")
+        mapped = category_map.get(cat, "other")
+        if mapped in categories:
+            categories[mapped].append(email)
+        else:
+            categories["other"].append(email)
+
+    parts = []
+    parts.append(f"📬 Bạn có {count} email mới cần chú ý.\n")
+
+    # Important (red)
+    if categories["important"]:
+        parts.append("🔴 Quan trọng")
+        for email in categories["important"]:
+            sender = email.get("sender", "Không rõ")
+            subject = email.get("subject", "Không có tiêu đề")
+            summary = email.get("summary", "")
+            parts.append(f"\n• {sender}")
+            parts.append(f"  * {subject}")
+            if summary:
+                parts.append(f"  * {summary}")
+        parts.append("")
+
+    # Need action (yellow)
+    if categories["need_action"]:
+        parts.append("🟡 Cần xử lý")
+        for email in categories["need_action"]:
+            sender = email.get("sender", "Không rõ")
+            subject = email.get("subject", "Không có tiêu đề")
+            summary = email.get("summary", "")
+            parts.append(f"\n• {sender}")
+            parts.append(f"  * {subject}")
+            if summary:
+                parts.append(f"  * {summary}")
+        parts.append("")
+
+    # Informational (green)
+    if categories["informational"]:
+        parts.append("🟢 Thông tin")
+        for email in categories["informational"]:
+            sender = email.get("sender", "Không rõ")
+            subject = email.get("subject", "Không có tiêu đề")
+            parts.append(f"\n• {sender}")
+            parts.append(f"  * {subject}")
+        parts.append("")
+
+    # Other
+    if categories["other"]:
+        parts.append("⚪ Khác")
+        for email in categories["other"]:
+            sender = email.get("sender", "Không rõ")
+            subject = email.get("subject", "Không có tiêu đề")
+            parts.append(f"\n• {sender}")
+            parts.append(f"  * {subject}")
+        parts.append("")
+
+    # Action suggestions
+    if categories["important"] or categories["need_action"]:
+        parts.append("💡 Gợi ý hành động:")
+        idx = 1
+        for email in categories["important"]:
+            parts.append(
+                f"{idx}. Xem và phản hồi email từ {email.get('sender', '')}")
+            idx += 1
+        for email in categories["need_action"]:
+            parts.append(f"{idx}. Xử lý email từ {email.get('sender', '')}")
+            idx += 1
+
+    return "\n".join(parts)
+
+
 # ── Routes ────────────────────────────────────────────────────────────────────
 @router.post("/chat", response_model=ChatResponse)
 async def chat_endpoint(req: ChatRequest, current_user: dict = Depends(get_current_user)):
     messages = [m.dict() for m in req.messages]
+
+    # If emails provided (from Quick Action card), generate summary directly
+    if req.emails:
+        reply = _build_email_summary_prompt(req.emails)
+        session_id = req.session_id or str(uuid.uuid4())
+        log_event(agent="chat", status="ok", payload={
+            "reply": reply[:200], "action": None, "user_id": current_user["id"],
+            "email_summary": len(req.emails)
+        })
+        return ChatResponse(reply=reply, action=None, session_id=session_id)
+
     result = chat(messages)
     reply = result["reply"]
     action = result["action"]
@@ -738,3 +848,58 @@ async def dashboard_logs(
         date_to=date_to,
     )
     return result
+
+
+# ── Email Intelligence Dashboard ────────────────────────────────────────────────
+
+
+@router.get("/dashboard/email-stats")
+async def email_stats(
+    current_user: dict = Depends(get_current_user),
+    track_view: bool = False,
+):
+    """
+    Return email intelligence statistics since the user's last Dashboard visit.
+
+    - If last_dashboard_view_at is NULL (first visit), count ALL emails.
+    - Otherwise, only count emails with processed_at >= last_dashboard_view_at.
+    - When track_view=True (initial manual Dashboard load), update
+      last_dashboard_view_at to now() after returning stats.
+    - When track_view=False (auto-refresh polling), do NOT update the timestamp
+      so the "since last view" window stays anchored to the user's actual visit.
+    """
+    from app.db.sqlite import get_email_statistics_since, update_last_dashboard_view
+
+    last_view = current_user.get("last_dashboard_view_at")
+    stats = get_email_statistics_since(since=last_view)
+
+    # Only update the "last viewed" timestamp on an explicit Dashboard visit,
+    # NOT on automatic background refreshes.
+    if track_view:
+        user_id = current_user["id"]
+        update_last_dashboard_view(user_id)
+
+    return stats
+
+
+@router.get("/dashboard/recent-emails")
+async def recent_emails(
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Return emails received since the user's last Dashboard view.
+
+    Read current_user["last_dashboard_view_at"]:
+      - If NULL → return the latest 20 emails.
+      - Otherwise → return emails with processed_at > that timestamp.
+
+    This endpoint is READ-ONLY – it does NOT update last_dashboard_view_at.
+
+    Returns:
+        { "emails": [...], "count": N }
+    """
+    from app.db.sqlite import get_recent_emails_for_summary
+
+    last_view = current_user.get("last_dashboard_view_at")
+    emails = get_recent_emails_for_summary(since=last_view)
+    return {"emails": emails, "count": len(emails)}

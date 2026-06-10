@@ -123,18 +123,51 @@ class TestRunPipeline:
         mock_send_reply.assert_called_once()
 
     @patch("app.orchestrator.orchestrator.process_email")
+    @patch("app.orchestrator.orchestrator.classify_intelligence")
+    @patch("app.orchestrator.orchestrator.insert_email_analysis")
     @patch("app.orchestrator.orchestrator.send_reply")
     @patch("app.orchestrator.orchestrator.log_event")
     @pytest.mark.asyncio
-    async def test_other_flow(self, mock_log, mock_send_reply, mock_email):
-        """Should execute other_flow when intent is 'other' — sends fixed fallback email."""
+    async def test_other_flow(self, mock_log, mock_send_reply, mock_insert, mock_intel, mock_email):
+        """Should execute other_flow when intent is 'other' — calls intelligence agent and sends fallback email."""
         mock_email.return_value = {"intent": "other"}
+        mock_intel.return_value = {
+            "category": "report",
+            "importance_score": 78,
+            "summary": "- Doanh thu Q2 tăng 12%",
+            "extracted_data": {"project": "Test"},
+        }
+        mock_send_reply.return_value = {"status": "sent"}
+
+        email_obj = MagicMock()
+        email_obj.sender = "user@example.com"
+        email_obj.subject = "Test"
+        result = await run_pipeline(email_obj)
+
+        assert result["type"] == "other_flow"
+        assert result["data"]["notification"]["status"] == "sent"
+        assert result["data"]["intelligence"]["category"] == "report"
+        assert result["data"]["intelligence"]["importance_score"] == 78
+        mock_intel.assert_called_once_with(email_obj)
+        mock_insert.assert_called_once()
+        mock_send_reply.assert_called_once()
+
+    @patch("app.orchestrator.orchestrator.process_email")
+    @patch("app.orchestrator.orchestrator.classify_intelligence")
+    @patch("app.orchestrator.orchestrator.send_reply")
+    @patch("app.orchestrator.orchestrator.log_event")
+    @pytest.mark.asyncio
+    async def test_other_flow_intelligence_error_handled(self, mock_log, mock_send_reply, mock_intel, mock_email):
+        """When intelligence agent fails, should still send fallback email."""
+        mock_email.return_value = {"intent": "other"}
+        mock_intel.side_effect = Exception("AI failure")
         mock_send_reply.return_value = {"status": "sent"}
 
         email_obj = MagicMock()
         email_obj.sender = "user@example.com"
         result = await run_pipeline(email_obj)
 
+        # Should still complete with error handling
         assert result["type"] == "other_flow"
         assert result["data"]["notification"]["status"] == "sent"
         mock_send_reply.assert_called_once()

@@ -146,3 +146,215 @@ class TestDashboardLogs:
         data = response.json()
         assert data["total"] == 1
         assert data["items"][0]["status"] == "new"
+
+
+# ── Email Intelligence Dashboard ──────────────────────────────────────────────
+
+
+class TestEmailStats:
+    """Tests for GET /dashboard/email-stats."""
+
+    def test_email_stats_returns_structure(self, auth_client):
+        """Should return total + category breakdown."""
+        response = auth_client.get("/dashboard/email-stats")
+        assert response.status_code == 200
+        data = response.json()
+        assert "total" in data
+        assert "meeting" in data
+        assert "report" in data
+        assert "partnership" in data
+        assert "support" in data
+        assert "announcement" in data
+        assert "other" in data
+
+    def test_email_stats_empty_db(self, auth_client):
+        """Should return all zeros when no analyzed emails."""
+        response = auth_client.get("/dashboard/email-stats")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total"] == 0
+        assert data["meeting"] == 0
+        assert data["report"] == 0
+
+    def test_email_stats_with_data(self, auth_client, db_connection):
+        """Should reflect seeded email_intelligence data."""
+        from app.db.sqlite import get_connection, init_db
+
+        # Ensure email_intelligence table exists
+        init_db()
+        conn = get_connection()
+        cur = conn.cursor()
+        samples = [
+            ("sender1@test.com", "Subject 1", "report", "Summary 1", '{}', 70),
+            ("sender2@test.com", "Subject 2", "meeting", "Summary 2", '{}', 80),
+            ("sender3@test.com", "Subject 3", "report", "Summary 3", '{}', 60),
+            ("sender4@test.com", "Subject 4", "support", "Summary 4", '{}', 50),
+        ]
+        for sender, subject, category, summary, extracted, score in samples:
+            cur.execute(
+                "INSERT INTO email_intelligence "
+                "(email_id, sender, subject, category, summary, "
+                "extracted_data_json, importance_score) "
+                "VALUES (NULL, ?, ?, ?, ?, ?, ?)",
+                (sender, subject, category, summary, extracted, score),
+            )
+        conn.commit()
+        conn.close()
+
+        response = auth_client.get("/dashboard/email-stats")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total"] == 4
+        assert data["report"] == 2
+        assert data["meeting"] == 1
+        assert data["support"] == 1
+        assert data["partnership"] == 0
+
+
+class TestRecentEmails:
+    """Tests for GET /dashboard/recent-emails."""
+
+    def test_recent_emails_returns_structure(self, auth_client):
+        """Should return items, total, page, page_size."""
+        response = auth_client.get("/dashboard/recent-emails")
+        assert response.status_code == 200
+        data = response.json()
+        assert "items" in data
+        assert "total" in data
+        assert "page" in data
+        assert "page_size" in data
+
+    def test_recent_emails_empty_db(self, auth_client):
+        """Should return empty items when no analyzed emails."""
+        response = auth_client.get("/dashboard/recent-emails")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total"] == 0
+        assert data["items"] == []
+
+    def test_recent_emails_with_data(self, auth_client, db_connection):
+        """Should return seeded email_intelligence data."""
+        from app.db.sqlite import get_connection, init_db
+
+        init_db()
+        conn = get_connection()
+        cur = conn.cursor()
+        samples = [
+            ("sender_a@test.com", "Report Q2", "report",
+             "Báo cáo Q2", '{}', 75),
+            ("sender_b@test.com", "Meeting request", "meeting",
+             "Họp dự án", '{}', 85),
+            ("sender_c@test.com", "Hỗ trợ kỹ thuật", "support",
+             "Cần hỗ trợ API", '{}', 45),
+            ("sender_d@test.com", "Partnership offer", "partnership",
+             "Đề xuất hợp tác", '{}', 90),
+            ("sender_e@test.com", "Thông báo", "announcement",
+             "Thông báo bảo trì", '{}', 30),
+        ]
+        for sender, subject, category, summary, extracted, score in samples:
+            cur.execute(
+                "INSERT INTO email_intelligence "
+                "(email_id, sender, subject, category, summary, "
+                "extracted_data_json, importance_score) "
+                "VALUES (NULL, ?, ?, ?, ?, ?, ?)",
+                (sender, subject, category, summary, extracted, score),
+            )
+        conn.commit()
+        conn.close()
+
+        response = auth_client.get("/dashboard/recent-emails")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total"] == 5
+        assert len(data["items"]) == 5
+        # Each item should have required fields
+        for item in data["items"]:
+            assert "sender" in item
+            assert "category" in item
+            assert "summary" in item
+            assert "importance_score" in item
+            assert "processed_at" in item
+
+    def test_recent_emails_pagination(self, auth_client, db_connection):
+        """Should respect page_size parameter."""
+        from app.db.sqlite import get_connection, init_db
+
+        init_db()
+        conn = get_connection()
+        cur = conn.cursor()
+        for i in range(10):
+            cur.execute(
+                "INSERT INTO email_intelligence "
+                "(email_id, sender, subject, category, summary, "
+                "extracted_data_json, importance_score) "
+                "VALUES (NULL, ?, ?, ?, ?, ?, ?)",
+                (f"sender{i}@test.com", f"Subject {i}", "other",
+                 f"Summary {i}", '{}', 50 - i),
+            )
+        conn.commit()
+        conn.close()
+
+        response = auth_client.get("/dashboard/recent-emails?page_size=3")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["items"]) == 3
+        assert data["page_size"] == 3
+        assert data["total"] == 10
+
+    def test_recent_emails_page_2(self, auth_client, db_connection):
+        """Should return correct page 2 results."""
+        from app.db.sqlite import get_connection, init_db
+
+        init_db()
+        conn = get_connection()
+        cur = conn.cursor()
+        for i in range(5):
+            cur.execute(
+                "INSERT INTO email_intelligence "
+                "(email_id, sender, subject, category, summary, "
+                "extracted_data_json, importance_score) "
+                "VALUES (NULL, ?, ?, ?, ?, ?, ?)",
+                (f"sender{i}@test.com", f"Subject {i}", "other",
+                 f"Summary {i}", '{}', 50 - i),
+            )
+        conn.commit()
+        conn.close()
+
+        response = auth_client.get(
+            "/dashboard/recent-emails?page=2&page_size=2")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["page"] == 2
+        assert len(data["items"]) == 2
+
+    def test_recent_emails_sort_by_importance(self, auth_client, db_connection):
+        """Should sort by importance_score DESC when sort_by=importance."""
+        from app.db.sqlite import get_connection, init_db
+
+        init_db()
+        conn = get_connection()
+        cur = conn.cursor()
+        # Insert with varying importance scores
+        scores = [30, 90, 50, 80, 40]
+        for i, score in enumerate(scores):
+            cur.execute(
+                "INSERT INTO email_intelligence "
+                "(email_id, sender, subject, category, summary, "
+                "extracted_data_json, importance_score) "
+                "VALUES (NULL, ?, ?, ?, ?, ?, ?)",
+                (f"sender{i}@test.com", f"Subject {i}", "report",
+                 f"Summary {i}", '{}', score),
+            )
+        conn.commit()
+        conn.close()
+
+        response = auth_client.get(
+            "/dashboard/recent-emails?sort_by=importance")
+        assert response.status_code == 200
+        data = response.json()
+        items = data["items"]
+        # First item should have highest importance
+        assert items[0]["importance_score"] == 90
+        # Second should be 80
+        assert items[1]["importance_score"] == 80
+        assert items[2]["importance_score"] == 50

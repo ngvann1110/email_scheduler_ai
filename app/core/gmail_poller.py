@@ -1,7 +1,10 @@
 import asyncio
 import base64
 import logging
+from datetime import datetime, timezone
 from email import message_from_bytes
+from email.header import decode_header
+from email.utils import parseaddr, parsedate_to_datetime
 
 from app.agents.evaluation_agent import evaluate_and_retry
 from app.agents.spam_filter import is_spam
@@ -12,6 +15,60 @@ from app.orchestrator.orchestrator import run_pipeline
 from app.schemas.email import EmailSchema
 
 logger = logging.getLogger(__name__)
+
+
+def decode_mime_header(value: str) -> str:
+    """
+    Decode MIME encoded-word headers (RFC 2047) like:
+        =?UTF-8?B?QsOBTyBDw4FPIFTJThkgxJDu?=
+    back to human-readable Vietnamese text.
+
+    Handles mixed encoded + plain text parts.
+    Falls back to original value if decoding fails.
+    """
+    if not value:
+        return value
+    try:
+        parts = decode_header(value)
+        decoded_parts: list[str] = []
+        for part, charset in parts:
+            if isinstance(part, bytes):
+                decoded_parts.append(
+                    part.decode(charset or "utf-8", errors="ignore")
+                )
+            else:
+                decoded_parts.append(str(part))
+        return "".join(decoded_parts).strip()
+    except Exception:
+        return value
+
+
+def _parse_date_header(mail) -> str:
+    """
+    Convert the email Date header (RFC 2822) to ISO 8601 string.
+
+    Handles real-world Gmail headers like:
+        Thu, 11 Jun 2026 00:24:18 +0700
+        Mon, 01 Jan 2025 12:30:00 +0000
+
+    Fallback behaviour:
+        - Missing / empty header → current UTC time in ISO 8601
+        - Unparseable header     → warning + current UTC time in ISO 8601
+    """
+    raw_date = mail.get("Date", "")
+    if not raw_date:
+        logger.warning("[Poller] Email thiếu Date header → dùng UTC hiện tại")
+        return datetime.now(timezone.utc).isoformat()
+
+    try:
+        dt = parsedate_to_datetime(raw_date)
+        return dt.isoformat()
+    except (ValueError, TypeError) as e:
+        logger.warning(
+            "[Poller] Không parse được Date header '%s': %s → dùng UTC hiện tại",
+            raw_date, e,
+        )
+        return datetime.now(timezone.utc).isoformat()
 
 
 # ── Parse
@@ -33,11 +90,22 @@ def _parse_message(service, msg_id: str) -> dict | None:
             body = mail.get_payload(decode=True).decode(
                 "utf-8", errors="ignore")
 
+        raw_sender = mail.get("From", "")
+        raw_subject = mail.get("Subject", "(no subject)")
+
+        # decode MIME encoded-words (RFC 2047) → Vietnamese text
+        decoded_sender = decode_mime_header(raw_sender)
+        decoded_subject = decode_mime_header(raw_subject)
+
+        # Extract bare email address from "Display Name <email>" format
+        _name, addr = parseaddr(decoded_sender)
+        sender_addr = addr or decoded_sender  # fallback to full string
+
         return {
-            "sender":    mail.get("From", ""),
-            "subject":   mail.get("Subject", "(no subject)"),
+            "sender":    sender_addr,
+            "subject":   decoded_subject,
             "body":      body.strip(),
-            "timestamp": mail.get("Date", ""),
+            "timestamp": _parse_date_header(mail),
         }
     except Exception as e:
         logger.error("[Poller] Không parse được email %s: %s", msg_id, e)
