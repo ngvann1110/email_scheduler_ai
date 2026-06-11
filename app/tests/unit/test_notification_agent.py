@@ -2,7 +2,7 @@
 Unit tests for app/agents/notification_agent.py
 
 Tests:
-- send_notification() — all status branches (created, cancelled, conflict, etc.)
+- send_notification() — all status branches (created, conflict, rescheduled, etc.)
 - _build_*_email() — each email builder function
 - _decode_subject(), _format_datetime() — helper functions
 - _send() — Gmail API call
@@ -18,8 +18,6 @@ from app.agents.notification_agent import (
     _format_datetime,
     _build_success_email,
     _build_conflict_email,
-    _build_cancel_email,
-    _build_cancel_not_found_email,
     _build_reschedule_email,
     _build_reschedule_not_found_email,
     _build_error_email,
@@ -137,43 +135,6 @@ class TestBuildConflictEmail:
         assert "khong tim duoc" in body.lower()
 
 
-class TestBuildCancelEmail:
-    """Tests for _build_cancel_email."""
-
-    def _get_body(self, msg):
-        """Extract plain text body from a MIME message."""
-        if msg.is_multipart():
-            for part in msg.walk():
-                if part.get_content_type() == "text/plain":
-                    return part.get_payload(decode=True).decode("utf-8", errors="ignore")
-        return msg.get_payload(decode=True).decode("utf-8", errors="ignore")
-
-    def test_returns_mime_message(self):
-        msg = _build_cancel_email(
-            to="user@example.com",
-            subject="Cancel meeting",
-            calendar_result={"event_title": "Team standup",
-                             "status": "cancelled"},
-            email_result={"time": "2026-06-10T09:00:00"},
-        )
-        assert "Da huy lich hop" in msg["Subject"]
-        body = self._get_body(msg)
-        assert "Team standup" in body
-
-
-class TestBuildCancelNotFoundEmail:
-    """Tests for _build_cancel_not_found_email."""
-
-    def test_returns_mime_message(self):
-        msg = _build_cancel_not_found_email(
-            to="user@example.com",
-            subject="Cancel meeting",
-            calendar_result={"status": "not_found"},
-            email_result={"time": "2026-06-10T09:00:00"},
-        )
-        assert "Khong tim thay lich hop" in msg["Subject"]
-
-
 class TestBuildRescheduleEmail:
     """Tests for _build_reschedule_email."""
 
@@ -272,18 +233,6 @@ class TestSendNotification:
 
     @patch("app.core.logger.log_event")
     @patch("app.agents.notification_agent._get_gmail_service")
-    def test_send_cancelled_notification(self, mock_get_service, mock_log, mock_gmail_service):
-        """Should send cancel email when status is 'cancelled'."""
-        mock_get_service.return_value = mock_gmail_service
-        result = send_notification(
-            email_obj=MagicMock(sender="user@example.com", subject="Cancel"),
-            email_result={"time": "2026-06-10T09:00:00"},
-            calendar_result={"status": "cancelled", "event_title": "Meeting"},
-        )
-        assert result["status"] == "sent"
-
-    @patch("app.core.logger.log_event")
-    @patch("app.agents.notification_agent._get_gmail_service")
     def test_send_conflict_notification(self, mock_get_service, mock_log, mock_gmail_service):
         """Should send conflict email when status is 'conflict'."""
         mock_get_service.return_value = mock_gmail_service
@@ -293,18 +242,6 @@ class TestSendNotification:
             calendar_result={"status": "conflict"},
             conflict_result={"suggestions": [
                 {"label": "Tomorrow 10am", "start": "...", "end": "..."}]},
-        )
-        assert result["status"] == "sent"
-
-    @patch("app.core.logger.log_event")
-    @patch("app.agents.notification_agent._get_gmail_service")
-    def test_send_not_found_notification(self, mock_get_service, mock_log, mock_gmail_service):
-        """Should send not-found email when status is 'not_found'."""
-        mock_get_service.return_value = mock_gmail_service
-        result = send_notification(
-            email_obj=MagicMock(sender="user@example.com", subject="Cancel"),
-            email_result={"time": "2026-06-10T09:00:00"},
-            calendar_result={"status": "not_found"},
         )
         assert result["status"] == "sent"
 

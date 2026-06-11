@@ -235,6 +235,37 @@
             box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
         }
 
+        .tab-badge {
+            display: inline-block;
+            background: #ef4444;
+            color: white;
+            font-size: 11px;
+            font-weight: 700;
+            min-width: 20px;
+            height: 20px;
+            line-height: 20px;
+            border-radius: 10px;
+            text-align: center;
+            padding: 0 5px;
+            margin-left: 6px;
+            vertical-align: middle;
+            animation: popBadge 0.35s ease;
+        }
+
+        @keyframes popBadge {
+            0% {
+                transform: scale(0);
+            }
+
+            60% {
+                transform: scale(1.25);
+            }
+
+            100% {
+                transform: scale(1);
+            }
+        }
+
         .status-dot {
             width: 7px;
             height: 7px;
@@ -459,6 +490,63 @@
         .action-card .row .val {
             color: var(--text);
             font-weight: 600;
+        }
+
+        /* Send Email Card */
+        .send-email-card .email-body-preview {
+            background: rgba(255, 255, 255, 0.7);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 10px 12px;
+            margin: 8px 0 12px;
+            font-size: 13px;
+            line-height: 1.6;
+            max-height: 160px;
+            overflow-y: auto;
+            color: var(--text);
+            font-weight: 500;
+        }
+
+        .send-email-btn {
+            width: 100%;
+            padding: 10px 0;
+            border: none;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #3b82f6, #60a5fa);
+            color: white;
+            font-family: 'Nunito', sans-serif;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.25s;
+            box-shadow: 0 3px 12px rgba(59, 130, 246, 0.3);
+        }
+
+        .send-email-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+            background: linear-gradient(135deg, #2563eb, #3b82f6);
+        }
+
+        .send-email-btn:active {
+            transform: scale(0.97);
+        }
+
+        .send-email-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .send-email-btn.success {
+            background: linear-gradient(135deg, #16a34a, #34d399);
+            box-shadow: 0 3px 12px rgba(22, 163, 74, 0.3);
+        }
+
+        .send-email-btn.error {
+            background: linear-gradient(135deg, #dc2626, #f87171);
+            box-shadow: 0 3px 12px rgba(220, 38, 38, 0.3);
         }
 
         /* Typing */
@@ -867,10 +955,6 @@
             color: #d97706;
         }
 
-        .status-badge.cancelled {
-            background: rgba(239, 68, 68, 0.1);
-            color: #dc2626;
-        }
 
         .status-badge.rescheduled {
             background: rgba(59, 130, 246, 0.1);
@@ -1133,6 +1217,76 @@
             transform: scale(0.97);
         }
 
+        /* ── Meeting Confirmation Notification Card ─────────────────────────── */
+        .notification-card {
+            background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+            border: 2px solid #86efac;
+            border-radius: 16px;
+            padding: 16px 20px;
+            margin-bottom: 12px;
+            animation: fadeUp 0.4s ease;
+            box-shadow: 0 3px 12px rgba(34, 197, 94, 0.12);
+        }
+
+        .notification-card .notif-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 10px;
+            font-family: 'Quicksand', sans-serif;
+            font-size: 15px;
+            font-weight: 800;
+            color: #15803d;
+        }
+
+        .notification-card .notif-body {
+            font-size: 13px;
+            color: var(--text);
+            line-height: 1.8;
+        }
+
+        .notification-card .notif-row {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 4px;
+        }
+
+        .notification-card .notif-label {
+            font-weight: 700;
+            color: var(--muted);
+            min-width: 110px;
+            flex-shrink: 0;
+        }
+
+        .notification-card .notif-value {
+            font-weight: 600;
+            color: var(--text);
+            word-break: break-word;
+        }
+
+        .notification-card .notif-value a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+
+        .notification-card .notif-value a:hover {
+            text-decoration: underline;
+        }
+
+        .notification-card .notif-time {
+            font-size: 11px;
+            color: var(--muted);
+            margin-top: 8px;
+            font-style: italic;
+        }
+
+        .notification-empty {
+            text-align: center;
+            color: var(--muted);
+            font-size: 13px;
+            padding: 12px;
+        }
+
         /* ── App Container ───────────────────────────────────────────────── */
         #appContainer {
             display: none;
@@ -1181,7 +1335,8 @@
             </div>
             <div class="tab-nav">
                 <button class="tab-btn active" data-tab="chat">💬 Chat</button>
-                <button class="tab-btn" data-tab="dashboard">📊 Dashboard</button>
+                <button class="tab-btn" data-tab="dashboard">📊 Dashboard<span class="tab-badge" id="meetingBadge"
+                        style="display:none;"></span></button>
             </div>
             <div class="status">
                 <div class="status-dot"></div>
@@ -1193,14 +1348,15 @@
             <div class="welcome" id="welcome">
                 <span class="welcome-icon">🤖</span>
                 <h2>Xin chào! Tôi có thể giúp gì?</h2>
-                <p>Hãy nói chuyện với tôi để đặt lịch họp, kiểm tra lịch trống, hoặc huỷ / dời lịch một cách dễ dàng.
+                <p>Hãy nói chuyện với tôi để đặt lịch họp, kiểm tra lịch trống, soạn email, hoặc trả lời email một cách
+                    dễ dàng.
                 </p>
                 <div class="quick-actions">
                     <button class="quick-btn" onclick="summarizeNewEmails()">📬 Tổng hợp email mới</button>
                     <button class="quick-btn" onclick="quickSend('Tôi muốn đặt lịch họp')">📅 Đặt lịch họp</button>
                     <button class="quick-btn" onclick="quickSend('Lịch của tôi tuần này thế nào?')">📋 Xem lịch</button>
                     <button class="quick-btn" onclick="quickSend('Tôi muốn dời lịch họp')">🔄 Dời lịch</button>
-                    <button class="quick-btn" onclick="quickSend('Tôi muốn huỷ lịch họp')">❌ Huỷ lịch</button>
+                    <button class="quick-btn" onclick="quickSend('Tôi muốn soạn email')">✉️ Soạn email</button>
                 </div>
             </div>
         </div>
@@ -1303,6 +1459,14 @@
                 </div>
             </div>
 
+            <!-- Meeting Confirmation Notifications -->
+            <div class="section-card" id="meetingNotificationsSection" style="display:none;">
+                <h3>🎉 Cuộc họp vừa được xác nhận</h3>
+                <div id="meetingNotificationsContent">
+                    <div class="notification-empty">Chưa có xác nhận cuộc họp nào.</div>
+                </div>
+            </div>
+
             <!-- Event logs -->
             <div class="section-card" id="logsSection" style="display:none;">
                 <h3>📋 Lịch sử sự kiện</h3>
@@ -1327,12 +1491,12 @@
                         <option value="received">Received</option>
                         <option value="processed">Processed</option>
                         <option value="created">Created</option>
-                        <option value="cancelled">Cancelled</option>
                         <option value="rescheduled">Rescheduled</option>
                         <option value="conflict">Conflict</option>
                         <option value="sent">Sent</option>
                         <option value="success">Success</option>
                         <option value="failed">Failed</option>
+                        <option value="meeting_accepted">Meeting Accepted</option>
                     </select>
                     <input type="text" id="filterSearch" placeholder="🔍 Tìm kiếm trong payload...">
                     <button class="filter-btn" onclick="applyLogFilters()">Lọc</button>
@@ -1411,7 +1575,13 @@
         }
 
         // Initialize auth on page load
-        checkAuth();
+        checkAuth().then(() => {
+            if (currentUser) {
+                checkMeetingBadge();
+                // Check badge every 30s even when on Chat tab
+                setInterval(checkMeetingBadge, 30000);
+            }
+        });
 
         function autoResize(el) {
             el.style.height = 'auto';
@@ -1517,6 +1687,18 @@
           ${action.location ? `<div class="row"><span class="icon">📍</span><span class="val">${action.location}</span></div>` : ''}
         </div>`;
             }
+            if (action && action.type === 'send_email') {
+                actionHTML = `
+        <div class="action-card send-email-card">
+          <div class="label">📧 Xem trước email</div>
+          <div class="row"><span class="icon">📩</span><span class="val">Người nhận: ${action.to || ''}</span></div>
+          <div class="row"><span class="icon">📝</span><span class="val">Tiêu đề: ${action.subject || ''}</span></div>
+          <div class="email-body-preview">${escapeHtml(action.body || '').replace(/\n/g, '<br>')}</div>
+           <button class="send-email-btn" data-email='${JSON.stringify({ to: action.to, subject: action.subject, body: action.body })}' onclick="confirmSendEmail(this)">
+             ✉️ Gửi email
+           </button>
+        </div>`;
+            }
 
             div.innerHTML = `
       <div class="avatar">${avatar}</div>
@@ -1554,6 +1736,58 @@
             return text
                 .replace(/&/g, '&').replace(/</g, '<').replace(/>/g, '>')
                 .replace(/\n/g, '<br>');
+        }
+
+        async function confirmSendEmail(btn) {
+            console.log("BUTTON CLICKED");
+            console.log("RAW DATA:", btn.dataset.email);
+            let emailData;
+            try {
+                emailData = JSON.parse(btn.dataset.email);
+                console.log("PARSED:", emailData);
+            } catch (e) {
+                console.error("JSON PARSE FAILED", e);
+                btn.textContent = '❌ Dữ liệu không hợp lệ';
+                btn.classList.add('error');
+                setTimeout(() => {
+                    btn.textContent = '✉️ Gửi email';
+                    btn.classList.remove('error');
+                    btn.disabled = false;
+                }, 2500);
+                return;
+            }
+            btn.disabled = true;
+            btn.textContent = '⏳ Đang gửi...';
+            try {
+                console.log("BEFORE FETCH");
+                const res = await fetch(`${API}/chat/send-email`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify(emailData),
+                });
+                const data = await res.json();
+                if (data.status === 'ok') {
+                    btn.textContent = '✅ Đã gửi!';
+                    btn.classList.add('success');
+                } else {
+                    btn.textContent = '❌ Gửi thất bại';
+                    btn.classList.add('error');
+                    setTimeout(() => {
+                        btn.textContent = '✉️ Gửi email';
+                        btn.classList.remove('error');
+                        btn.disabled = false;
+                    }, 2500);
+                }
+            } catch (err) {
+                btn.textContent = '❌ Lỗi kết nối';
+                btn.classList.add('error');
+                setTimeout(() => {
+                    btn.textContent = '✉️ Gửi email';
+                    btn.classList.remove('error');
+                    btn.disabled = false;
+                }, 2500);
+            }
         }
 
         async function sendMessage() {
@@ -1629,6 +1863,7 @@
                     inputArea.style.display = 'none';
                     dashboard.style.display = 'flex';
                     dashboard.classList.add('visible');
+                    clearMeetingBadge();
                     loadDashboard(true);  // Initial load -> track view
                     // Auto-refresh every 30 seconds (no view tracking)
                     if (dashboardState.refreshInterval) clearInterval(dashboardState.refreshInterval);
@@ -1638,7 +1873,7 @@
         });
 
         async function loadDashboard(trackView = false) {
-            await Promise.all([fetchDashboardStats(), fetchDashboardLogs(), fetchEmailStats(trackView)]);
+            await Promise.all([fetchDashboardStats(), fetchDashboardLogs(), fetchEmailStats(trackView), fetchMeetingConfirmations()]);
         }
 
         async function fetchDashboardStats() {
@@ -1783,6 +2018,98 @@
             }
         }
 
+        async function fetchMeetingConfirmations() {
+            try {
+                const res = await fetch(`${API}/dashboard/meeting-confirmations?page=1&page_size=10`, { credentials: 'include' });
+                if (res.status === 401) return;
+                const data = await res.json();
+                const notifications = data.notifications || [];
+
+                const section = document.getElementById('meetingNotificationsSection');
+                const content = document.getElementById('meetingNotificationsContent');
+
+                if (notifications.length === 0) {
+                    section.style.display = 'none';
+                    updateMeetingBadge(0);
+                    return;
+                }
+
+                section.style.display = 'block';
+                updateMeetingBadge(notifications.length);
+                let html = '';
+                notifications.forEach(n => {
+                    let timeStr = n.meeting_time || '';
+                    let createdStr = n.created_at || '';
+                    try {
+                        const d = new Date(n.created_at);
+                        const days = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'];
+                        createdStr = `${days[d.getDay()]}, ${d.toLocaleDateString('vi-VN')} lúc ${d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`;
+                    } catch (e) { }
+
+                    html += `
+                    <div class="notification-card">
+                        <div class="notif-header">
+                            <span>🎉</span> Cuộc họp đã được xác nhận
+                        </div>
+                        <div class="notif-body">
+                            <div class="notif-row">
+                                <span class="notif-label">Người tham gia:</span>
+                                <span class="notif-value"><a href="mailto:${escapeHtml(n.invitee_email)}">${escapeHtml(n.invitee_email)}</a></span>
+                            </div>
+                            <div class="notif-row">
+                                <span class="notif-label">Chủ đề:</span>
+                                <span class="notif-value">${escapeHtml(n.summary)}</span>
+                            </div>
+                            <div class="notif-row">
+                                <span class="notif-label">Thời gian:</span>
+                                <span class="notif-value">${escapeHtml(timeStr)}</span>
+                            </div>
+                        </div>
+                        <div class="notif-time">Xác nhận lúc ${createdStr}</div>
+                    </div>`;
+                });
+                content.innerHTML = html;
+            } catch (err) {
+                console.error('Meeting confirmations error:', err);
+            }
+        }
+
+        // ── Meeting Confirmation Badge ────────────────────────────────────
+        async function checkMeetingBadge() {
+            try {
+                const res = await fetch(`${API}/dashboard/meeting-confirmations?page=1&page_size=10`, { credentials: 'include' });
+                if (res.status === 401) return;
+                const data = await res.json();
+                const notifications = data.notifications || [];
+                updateMeetingBadge(notifications.length);
+            } catch (err) {
+                // Silently ignore errors during background badge check
+            }
+        }
+
+        function updateMeetingBadge(count) {
+            const badge = document.getElementById('meetingBadge');
+            if (!badge) return;
+            if (count > 0) {
+                badge.textContent = count;
+                badge.style.display = 'inline-block';
+                // Re-trigger pop animation
+                badge.style.animation = 'none';
+                badge.offsetHeight; // force reflow
+                badge.style.animation = '';
+            } else {
+                badge.style.display = 'none';
+                badge.textContent = '';
+            }
+        }
+
+        function clearMeetingBadge() {
+            const badge = document.getElementById('meetingBadge');
+            if (!badge) return;
+            badge.style.display = 'none';
+            badge.textContent = '';
+        }
+
         function getStatusClass(status) {
             const map = {
                 'ok': 'ok',
@@ -1795,7 +2122,6 @@
                 'failed': 'failed',
                 'spam': 'spam',
                 'conflict': 'conflict',
-                'cancelled': 'cancelled',
                 'rescheduled': 'rescheduled',
                 'warning': 'warning',
             };

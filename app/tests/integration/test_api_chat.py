@@ -59,33 +59,6 @@ class TestChatEndpoint:
         assert data.get("action") is not None
         assert data["action"]["type"] == "schedule"
 
-    def test_chat_with_cancel_action(self, auth_client):
-        """Should return cancel action."""
-        mock_client = MagicMock()
-        mock_client.chat.completions.create.return_value = type(
-            "MockResponse", (), {
-                "choices": [type("Choice", (), {
-                    "message": type("Message", (), {
-                        "content": (
-                            "Tôi sẽ hủy lịch.\n"
-                            "<action>\n"
-                            '{"type":"cancel","time":"2026-06-10T09:00:00","summary":"Cancel meeting"}\n'
-                            "</action>"
-                        )
-                    })()
-                })]
-            }
-        )()
-        with patch("app.agents.chat_agent.client", mock_client):
-            response = auth_client.post(
-                "/chat",
-                json={"messages": [
-                    {"role": "user", "content": "Cancel my meeting at 9am tomorrow"}]},
-            )
-        assert response.status_code == 200
-        data = response.json()
-        assert data["action"]["type"] == "cancel"
-
 
 class TestConfirmInvite:
     """Tests for GET /chat/confirm/{token}."""
@@ -107,17 +80,6 @@ class TestDeclineInvite:
         assert response.status_code == 200
         # Endpoint returns HTMLResponse, not JSON
         assert "tu choi" in response.text.lower() or "khong hop le" in response.text.lower()
-
-
-class TestConfirmCancel:
-    """Tests for GET /chat/cancel/confirm/{token}."""
-
-    def test_confirm_cancel_invalid_token(self, test_client):
-        """Should return error for non-existent token."""
-        response = test_client.get("/chat/cancel/confirm/nonexistent-token")
-        assert response.status_code == 200
-        # Endpoint returns HTMLResponse, not JSON
-        assert "khong hop le" in response.text.lower() or "het han" in response.text.lower()
 
 
 class TestConfirmReschedule:

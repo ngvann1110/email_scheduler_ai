@@ -18,7 +18,7 @@ Chỉ trả về JSON thuần, KHÔNG markdown, KHÔNG giải thích thêm.
 
 Schema:
 {
-  "intent": "<schedule | cancel | reschedule | inquiry | other>",
+   "intent": "<schedule | reschedule | inquiry | send_email | reply_email | other>",
   "summary": "<tóm tắt 1-2 câu>",
   "time": "<ISO 8601 giờ MỚI hoặc null>",
   "old_time": "<ISO 8601 giờ CŨ cần dời - chỉ dùng cho reschedule, còn lại null>",
@@ -30,7 +30,8 @@ Schema:
 
 Quy tắc intent:
 - schedule   : muốn đặt / tạo lịch mới
-- cancel     : muốn huỷ lịch đã có
+- send_email  : muốn soạn / gửi email mới
+- reply_email : muốn trả lời email
 - reschedule : muốn dời lịch sang giờ khác
 - inquiry    : hỏi về lịch, không đặt mới
 - other      : không liên quan lịch họp

@@ -2,7 +2,7 @@
 Unit tests for app/orchestrator/orchestrator.py
 
 Tests:
-- run_pipeline() — all intent branches (schedule, cancel, reschedule, inquiry, other)
+- run_pipeline() — all intent branches (schedule, send_email, reply_email, reschedule, inquiry, other)
 - Pipeline integration with mocked agents
 """
 
@@ -60,25 +60,6 @@ class TestRunPipeline:
         assert result["data"]["calendar"]["status"] == "conflict"
         assert result["data"]["conflict"]["status"] == "found"
         mock_conflict.assert_called_once()
-
-    @patch("app.orchestrator.orchestrator.process_email")
-    @patch("app.orchestrator.orchestrator.process_cancel")
-    @patch("app.orchestrator.orchestrator.send_notification")
-    @patch("app.orchestrator.orchestrator.log_event")
-    @pytest.mark.asyncio
-    async def test_cancel_flow(self, mock_log, mock_notification, mock_cancel, mock_email):
-        """Should execute cancel flow when intent is 'cancel'."""
-        mock_email.return_value = {
-            "intent": "cancel", "time": "2026-06-10T09:00:00"}
-        mock_cancel.return_value = {
-            "status": "cancelled", "event_id": "evt_001"}
-        mock_notification.return_value = {"status": "sent"}
-
-        result = await run_pipeline(MagicMock())
-
-        assert result["type"] == "cancel_flow"
-        assert result["data"]["calendar"]["status"] == "cancelled"
-        mock_cancel.assert_called_once()
 
     @patch("app.orchestrator.orchestrator.process_email")
     @patch("app.orchestrator.orchestrator.process_reschedule")

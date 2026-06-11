@@ -40,6 +40,12 @@ class ChatResponse(BaseModel):
     session_id: str = ""
 
 
+class SendEmailRequest(BaseModel):
+    to:      str
+    subject: str
+    body:   str
+
+
 # ── Helpers
 def _fmt_time(time_str: str) -> str:
     try:
@@ -171,42 +177,6 @@ Email Scheduler AI
     logger.info("[ChatAPI] Gui email moi → %s", to)
 
 
-def _send_cancel_notification(cal_result: dict):
-    """Gửi email thông báo huỷ lịch cho tất cả attendees trong event."""
-    event_title = cal_result.get("event_title", "Cuoc hop")
-    event_start = cal_result.get("event_start", "")
-    time_fmt = _fmt_time(event_start)
-    attendees = cal_result.get("attendees", [])
-
-    body = f"""Xin chao,
-
-Chung toi xin thong bao rang cuoc hop sau da bi huy:
-
-━━━━━━━━━━━━━━━━━━━━━━━━
-THONG BAO HUY LICH HOP
-━━━━━━━━━━━━━━━━━━━━━━━━
-Noi dung  : {event_title}
-Thoi gian : {time_fmt}
-Trang thai: Da huy va xoa khoi Google Calendar
-━━━━━━━━━━━━━━━━━━━━━━━━
-
-Xin loi vi su bat tien nay.
-Neu co thac mac, vui long lien he lai voi nguoi to chuc.
-
-Tran trong,
-Email Scheduler AI
-"""
-    subject = f"Thong bao huy lich: {event_title}"
-    for att in attendees:
-        if "@" in str(att):
-            try:
-                _send_email(att, subject, body)
-                logger.info("[ChatAPI] Da gui thong bao huy cho: %s", att)
-            except Exception as e:
-                logger.error(
-                    "[ChatAPI] Loi gui thong bao huy cho %s: %s", att, e)
-
-
 def _send_reschedule_notification(cal_result: dict):
     """Gửi email thông báo dời lịch cho attendees."""
     event_title = cal_result.get("event_title", "Cuoc hop")
@@ -312,28 +282,6 @@ def _create_calendar_event(action: dict):
         description="Tao tu Email Scheduler AI Chat",
     )
     return event.get("htmlLink", "")
-
-
-def _save_pending_cancel(token: str, action: dict):
-    conn = get_connection()
-    cur = conn.cursor()
-
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS pending_cancels (
-            token TEXT PRIMARY KEY,
-            action TEXT,
-            status TEXT DEFAULT 'pending',
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-
-    cur.execute(
-        "INSERT INTO pending_cancels (token, action) VALUES (?, ?)",
-        (token, json.dumps(action, ensure_ascii=False))
-    )
-
-    conn.commit()
-    conn.close()
 
 
 def _build_email_summary_prompt(emails: list[dict]) -> str:
@@ -465,76 +413,6 @@ async def chat_endpoint(req: ChatRequest, current_user: dict = Depends(get_curre
             logger.error("[ChatAPI] Loi gui email moi: %s", e)
             reply += f"\n\n⚠️ Không thể gửi email mời: {e}"
 
-    # ── Huỷ lịch ─────────────────────────────────────────────────────────────
-    elif action and action.get("type") == "cancel":
-        try:
-            from uuid import uuid4
-            from app.agents.calendar_agent import find_event_for_cancel
-            from app.agents.notification_agent import send_cancel_confirmation_email
-
-            # ── Tìm event cần huỷ
-            event = find_event_for_cancel(action)
-
-            if not event:
-                reply += "\n\n⚠️ Không tìm thấy lịch họp cần huỷ."
-                action = None
-
-            else:
-                # ── Tạo token xác nhận huỷ
-                cancel_token = str(uuid4())
-
-                pending_cancel = {
-                    "token": cancel_token,
-                    "event_id": event.get("event_id"),
-                    "summary": event.get("summary"),
-                    "time": event.get("time"),
-                    "attendees": event.get("attendees", []),
-                }
-
-                _save_pending_cancel(cancel_token, pending_cancel)
-
-                # TODO:
-                # lưu pending_cancel vào DB / SQLite / cache
-                # save_pending_cancel(pending_cancel)
-
-                # ── Gửi email xác nhận cho attendees
-                try:
-                    send_cancel_confirmation_email(
-                        attendees=event.get("attendees", []),
-                        organizer=event.get("organizer"),
-                        summary=event.get("summary"),
-                        time=event.get("time"),
-                        location=event.get("location"),
-                        token=cancel_token,
-                    )
-
-                    logger.info(
-                        "[ChatAPI] Da gui email xac nhan huy lich | event=%s",
-                        event.get("summary"),
-                    )
-
-                    reply += (
-                        f"\n\n📩 Đã gửi email xác nhận huỷ lịch "
-                        f"**{event.get('summary','')}** tới người tham gia."
-                        "\nLịch sẽ chỉ bị huỷ khi họ xác nhận đồng ý."
-                    )
-
-                except Exception as ex:
-                    logger.error(
-                        "[ChatAPI] Loi gui email xac nhan huy: %s", ex
-                    )
-
-                    reply += (
-                        "\n\n❌ Không thể gửi email xác nhận huỷ lịch."
-                    )
-
-                action = None
-
-        except Exception as e:
-            logger.error("[ChatAPI] Loi huy lich: %s", e)
-
-            reply += f"\n\n⚠️ Lỗi xử lý yêu cầu huỷ lịch: {e}"
-
     # ── Dời lịch ─────────────────────────────────────────────────────────────
     elif action and action.get("type") == "reschedule":
         try:
@@ -560,9 +438,57 @@ async def chat_endpoint(req: ChatRequest, current_user: dict = Depends(get_curre
             logger.error("[ChatAPI] Loi doi lich: %s", e)
             reply += f"\n\n⚠️ Lỗi dời lịch: {e}"
 
+    # ── Gửi email ───────────────────────────────────────────────────────────
+    elif action and action.get("type") == "send_email":
+        # Build preview in reply – email will be sent after user confirmation
+        preview = (
+            f"📧 **Xem trước email:**\n\n"
+            f"**Người nhận:** {action.get('to', '')}\n"
+            f"**Tiêu đề:** {action.get('subject', '')}\n"
+            f"**Nội dung:**\n{action.get('body', '')}"
+        )
+        reply = preview if not reply else reply
+        logger.info(
+            "[ChatAPI] send_email preview | to=%s | subject=%s",
+            action.get("to"), action.get("subject"),
+        )
+
     log_event(agent="chat", status="ok", payload={
               "reply": reply[:200], "action": action, "user_id": current_user["id"]})
     return ChatResponse(reply=reply, action=action, session_id=session_id)
+
+
+@router.post("/chat/send-email")
+async def send_email_endpoint(req: SendEmailRequest, current_user: dict = Depends(get_current_user)):
+    """
+    Send an email through Gmail API after user confirmation in chat.
+    """
+    send_time = datetime.now().isoformat()
+    try:
+        _send_email(req.to, req.subject, req.body)
+        logger.info(
+            "[ChatAPI] Email sent | to=%s | subject=%s | time=%s",
+            req.to, req.subject, send_time,
+        )
+        log_event(agent="chat", status="sent", payload={
+            "type": "send_email",
+            "to": req.to,
+            "subject": req.subject,
+            "send_time": send_time,
+            "user_id": current_user["id"],
+        })
+        return {"status": "ok", "message": f"✅ Đã gửi email cho {req.to}"}
+    except Exception as e:
+        logger.error("[ChatAPI] Loi gui email: %s", e)
+        log_event(agent="chat", status="failed", payload={
+            "type": "send_email",
+            "to": req.to,
+            "subject": req.subject,
+            "send_time": send_time,
+            "error": str(e),
+            "user_id": current_user["id"],
+        })
+        return {"status": "error", "message": f"❌ Lỗi gửi email: {e}"}
 
 
 @router.get("/chat/confirm/{token}")
@@ -589,6 +515,15 @@ async def confirm_invite(token: str):
             _notify_organizer(action, "confirmed", event_link)
         except Exception as e:
             logger.error("[ChatAPI] Loi thong bao organizer: %s", e)
+        invitee_email = action.get("invitee_email", "")
+        summary = action.get("summary", "Cuoc hop")
+        time_fmt = _fmt_time(action.get("time", ""))
+        log_event(agent="chat", status="meeting_accepted", payload={
+            "invitee_email": invitee_email,
+            "summary": summary,
+            "meeting_time": time_fmt,
+            "organizer_email": settings.ORGANIZER_EMAIL,
+        })
         logger.info("[ChatAPI] Xac nhan → tao lich: %s", event_link)
         return HTMLResponse(f"""
         <html><body style="font-family:sans-serif;text-align:center;padding:60px;background:#f0fdf4">
@@ -746,57 +681,6 @@ Email Scheduler AI
     </body></html>""")
 
 
-@router.get("/chat/cancel/confirm/{token}")
-async def confirm_cancel(token: str):
-
-    conn = get_connection()
-    cur = conn.cursor()
-
-    cur.execute(
-        "SELECT action, status FROM pending_cancels WHERE token=?",
-        (token,)
-    )
-
-    row = cur.fetchone()
-
-    if not row:
-        return HTMLResponse(
-            "<h2>Link khong hop le hoac da het han.</h2>"
-        )
-
-    if row[1] != "pending":
-        return HTMLResponse(
-            f"<h2>Yeu cau nay da duoc xu ly ({row[1]}).</h2>"
-        )
-
-    action = json.loads(row[0])
-    try:
-        from app.agents.calendar_agent import process_cancel
-        cal = process_cancel(action)
-
-        cur.execute(
-            "UPDATE pending_cancels SET status='confirmed' WHERE token=?", (token,))
-        conn.commit()
-        conn.close()
-
-        if cal.get("status") == "cancelled":
-            event_title = cal.get("event_title", "Cuoc hop")
-            event_start = cal.get("event_start", "")
-            time_fmt = _fmt_time(event_start)
-
-            return HTMLResponse(f"""
-            <html><body style="font-family:sans-serif;text-align:center;padding:60px;background:#f0fdf4">
-            <h1 style="color:#16a34a">Da huy lich thanh cong!</h1>
-            <p>Lich hop <b>{event_title}</b> ({time_fmt}) da duoc xoa khoi Google Calendar.</p>
-            </body></html>""")
-        else:
-            return HTMLResponse(f"<h2>Loi huy lich: {cal.get('message','')}</h2>")
-
-    except Exception as e:
-        conn.close()
-        return HTMLResponse(f"<h2>Loi: {e}</h2>")
-
-
 # ── Dashboard endpoints ────────────────────────────────────────────────────────
 
 
@@ -903,3 +787,51 @@ async def recent_emails(
     last_view = current_user.get("last_dashboard_view_at")
     emails = get_recent_emails_for_summary(since=last_view)
     return {"emails": emails, "count": len(emails)}
+
+
+# ── Meeting Confirmation Notifications ─────────────────────────────────────────
+
+
+@router.get("/dashboard/meeting-confirmations")
+async def meeting_confirmations(
+    current_user: dict = Depends(get_current_user),
+    page: int = 1,
+    page_size: int = 10,
+):
+    """
+    Return recent meeting_accepted notifications for the Dashboard notification card.
+
+    Queries system_logs WHERE status='meeting_accepted', ordered by most recent first.
+    Returns structured notification objects.
+    """
+    from app.db.sqlite import get_logs
+
+    result = get_logs(
+        agent="chat",
+        status="meeting_accepted",
+        page=page,
+        page_size=page_size,
+    )
+    items = result.get("items", [])
+    notifications = []
+    for item in items:
+        try:
+            payload = json.loads(item["payload"]) if isinstance(
+                item["payload"], str) else item["payload"]
+        except (json.JSONDecodeError, TypeError):
+            payload = {}
+        notifications.append({
+            "type": "meeting_accepted",
+            "invitee_email": payload.get("invitee_email", ""),
+            "summary": payload.get("summary", ""),
+            "meeting_time": payload.get("meeting_time", ""),
+            "organizer_email": payload.get("organizer_email", ""),
+            "created_at": item["timestamp"],
+            "event_id": item["event_id"],
+        })
+    return {
+        "notifications": notifications,
+        "total": result.get("total", 0),
+        "page": page,
+        "page_size": page_size,
+    }

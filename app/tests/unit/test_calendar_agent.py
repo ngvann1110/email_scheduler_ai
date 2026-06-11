@@ -3,7 +3,6 @@ Unit tests for app/agents/calendar_agent.py
 
 Tests:
 - process_schedule() — create event, conflict detection, error handling
-- process_cancel() — cancel event, not found, error handling
 - process_reschedule() — reschedule event, conflict, not found
 - _check_conflict(), _create_event(), _find_events_by_time()
 """
@@ -16,7 +15,6 @@ from googleapiclient.errors import HttpError
 
 from app.agents.calendar_agent import (
     process_schedule,
-    process_cancel,
     process_reschedule,
     _check_conflict,
     _create_event,
@@ -148,42 +146,6 @@ class TestProcessSchedule:
             result = process_schedule(email_result)
             assert result["status"] == "error"
             assert "Google Calendar" in result["message"]
-
-
-class TestProcessCancel:
-    """Tests for process_cancel()."""
-
-    def test_cancel_success(self, mock_calendar_service):
-        """Should cancel an existing event."""
-        with patch("app.agents.calendar_agent._get_service", return_value=mock_calendar_service):
-            email_result = {
-                "time": "2026-06-10T09:00:00",
-                "summary": "Cancel meeting",
-            }
-            result = process_cancel(email_result)
-            assert result["status"] == "cancelled"
-            assert "event_id" in result
-
-    def test_cancel_no_time(self, mock_calendar_service):
-        """Should return error when no time provided."""
-        with patch("app.agents.calendar_agent._get_service", return_value=mock_calendar_service):
-            email_result = {"time": None, "summary": ""}
-            result = process_cancel(email_result)
-            assert result["status"] == "error"
-            assert "thời gian" in result["message"]
-
-    def test_cancel_not_found(self, mock_calendar_service):
-        """Should return not_found when no event matches."""
-        # Override events list to return empty
-        mock_calendar_service.events().list().execute.return_value = {
-            "items": []}
-        with patch("app.agents.calendar_agent._get_service", return_value=mock_calendar_service):
-            email_result = {
-                "time": "2026-06-10T09:00:00",
-                "summary": "Cancel meeting",
-            }
-            result = process_cancel(email_result)
-            assert result["status"] == "not_found"
 
 
 class TestProcessReschedule:

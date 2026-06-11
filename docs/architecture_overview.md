@@ -1,7 +1,7 @@
 # Email Scheduler AI — Architecture Overview
 
 > **Repository:** `email_scheduler_ai` | **Commit:** `c9e73fcd` | **Date:** 2026-06-08
-> **Updated:** 2026-06-11 — Added Email Intelligence Agent, Analytics Dashboard
+> **Updated:** 2026-06-11 — Added Email Intelligence Agent, Analytics Dashboard, Email Assistant (Send/Reply)
 
 ---
 
@@ -13,11 +13,11 @@
 C4Context
     title System Context Diagram — Email Scheduler AI
 
-    Person(email_user, "Email User", "Sends meeting requests via email")
-    Person(chat_user, "Chat User", "Schedules via web chat UI")
+    Person(email_user, "Email User", "Sends meeting requests or email assistant requests via email")
+    Person(chat_user, "Chat User", "Schedules, composes emails, or replies via web chat UI")
     Person(invitee, "Meeting Invitee", "Confirms/declines meetings via link")
 
-    System(email_scheduler, "Email Scheduler AI", "Automated meeting scheduling\nwith AI + Google Calendar\n+ Email Intelligence Analytics")
+    System(email_scheduler, "Email Scheduler AI", "Automated meeting scheduling\n+ Email Assistant (Send/Reply)\nwith AI + Google Calendar\n+ Email Intelligence Analytics")
 
     System_Ext(gmail, "Google Gmail", "Email API v1")
     System_Ext(calendar, "Google Calendar", "Calendar API v3")
@@ -149,13 +149,14 @@ graph TB
 │                    PRESENTATION LAYER                        │
 │  ┌──────────────────────┐  ┌──────────────────────────────┐ │
 │  │   chat_ui.html       │  │  REST API Endpoints          │ │
-│  │   SPA (1623+ lines)  │  │  17 routes across 4 groups   │ │
+│  │   SPA (1623+ lines)  │  │  16 routes across 4 groups   │ │
 │  └──────────────────────┘  └──────────────────────────────┘ │
 ├─────────────────────────────────────────────────────────────┤
 │                    APPLICATION LAYER                         │
 │  ┌──────────────────────────────────────────────────────┐   │
 │  │              Orchestrator (orchestrator.py)          │   │
 │  │    Routes email intents to calendar/intelligence     │   │
+│  │    + send_email / reply_email handling               │   │
 │  └──────────────────────────────────────────────────────┘   │
 │  ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐    │
 │  │Spam  │ │Email │ │Email │ │Calen-│ │Conf- │ │Notif-│    │
@@ -176,7 +177,7 @@ graph TB
 │                    DATA LAYER                                │
 │  ┌──────────────────────────────────────────────────────┐   │
 │  │              SQLite Database (sqlite.py)              │   │
-│  │  system_logs | pending_invites | pending_cancels      │   │
+│  │  system_logs | pending_invites                        │   │
 │  │  pending_reschedules | users | email_intelligence     │   │
 │  └──────────────────────────────────────────────────────┘   │
 ├─────────────────────────────────────────────────────────────┤
@@ -307,14 +308,6 @@ sequenceDiagram
                     NotifA->>Gmail: users().messages().send(raw=base64_email)
                     Gmail-->>NotifA: {id, threadId}
 
-                else intent = "cancel"
-                    Orchestrator->>CalA: process_cancel(email_result)
-                    CalA->>Calendar: events.list(timeMin, timeMax)
-                    Calendar-->>CalA: [events in ±1h window]
-                    CalA->>Calendar: events.delete(eventId)
-                    Calendar-->>CalA: 204 No Content
-                    Orchestrator->>NotifA: send_notification(...)
-
                 else intent = "reschedule"
                     Orchestrator->>CalA: process_reschedule(email_result)
                     CalA->>Calendar: Find old event + check new slot free
@@ -326,8 +319,16 @@ sequenceDiagram
                     Orchestrator->>CalA: Query calendar events in range
                     Orchestrator->>NotifA: send_reply(email, result)
 
+                else intent = "send_email"
+                    Orchestrator->>Orchestrator: _handle_send_email(email_result)
+                    Note over Orchestrator: Compose + send email via Gmail
+
+                else intent = "reply_email"
+                    Orchestrator->>Orchestrator: _handle_reply_email(email_result)
+                    Note over Orchestrator: Generate context-aware reply + send
+
                 else intent = "other"
-                    Note over Orchestrator: No calendar action
+                    Note over Orchestrator: Route to Email Intelligence Agent
                 end
 
                 Orchestrator-->>EvalA: pipeline_result
@@ -437,52 +438,43 @@ sequenceDiagram
 ```
 
 **Source files:**
-- `app/api/v1/chat.py` — confirm (line 458), decline (line 497), reschedule_confirm (line 520), reschedule_decline (line 594), cancel_confirm (line 639)
+- `app/api/v1/chat.py` — confirm (line 458), decline (line 497), reschedule_confirm (line 520), reschedule_decline (line 594)
 - `app/core/jwt_auth.py` — decode_token()
 - `app/db/sqlite.py` — pending_invites CRUD
 
-### Flow 5: Cancel Meeting Flow
+### Flow 5: Email Assistant Flow (Send / Reply)
 
 ```mermaid
 sequenceDiagram
     participant Sender as Email User
     participant Poller
     participant EmailA as Email Agent
-    participant CalA as Calendar Agent
-    participant Calendar
-    participant NotifA as Notification Agent
+    participant Orchestrator
+    participant Gmail
 
-    Sender->>Gmail: "Hủy lịch họp 14h thứ Hai"
+    Sender->>Gmail: "Soạn email cho anh Nam" or "Trả lời email này..."
     Poller->>Gmail: Poll → new unread email
     Poller->>Poller: Parse + spam check → not spam
     Poller->>Poller: mark_as_read()
 
     Poller->>EmailA: process_email(email)
     EmailA->>OpenAI: GPT-4o classification
-    OpenAI-->>EmailA: {intent: "cancel", time: "2026-04-28T14:00:00"}
-
-    Poller->>CalA: process_cancel(email_result)
-    CalA->>Calendar: events.list(±1h around time)
-    Calendar-->>CalA: [matching_event]
-
-    alt event found
-        CalA->>Calendar: events.delete(event_id)
-        Calendar-->>CalA: 204
-        CalA-->>Poller: {status: "cancelled", event_id, attendees}
-        Poller->>NotifA: send_notification(...)
-        NotifA->>NotifA: _build_cancel_email()
-    else event not found
-        CalA-->>Poller: {status: "not_found"}
-        Poller->>NotifA: send_notification(...)
-        NotifA->>NotifA: _build_cancel_not_found_email()
+    alt intent = "send_email"
+        OpenAI-->>EmailA: {intent: "send_email", recipient, subject, body}
+        Poller->>Orchestrator: _handle_send_email(email_result)
+        Orchestrator->>Gmail: Compose and send new email
+    else intent = "reply_email"
+        OpenAI-->>EmailA: {intent: "reply_email", reply_body, tone}
+        Poller->>Orchestrator: _handle_reply_email(email_result)
+        Orchestrator->>Gmail: Reply to thread with context-aware response
     end
 
-    NotifA->>Gmail: Send reply
+    Gmail-->>Orchestrator: Email sent
 ```
 
 **Source files:**
-- `app/agents/calendar_agent.py:123-194` — process_cancel()
-- `app/agents/notification_agent.py` — email template builders
+- `app/agents/email_agent.py` — intent classification with send_email/reply_email
+- `app/orchestrator/orchestrator.py` — _handle_send_email(), _handle_reply_email()
 
 ### Flow 6: Dashboard Statistics
 
@@ -567,8 +559,8 @@ sequenceDiagram
 ```
 
 **Source files:**
-- `app/agents/calendar_agent.py:197-301` — process_reschedule()
-- `app/agents/conflict_agent.py:93-154` — find_alternatives()
+- `app/agents/calendar_agent.py` — process_reschedule()
+- `app/agents/conflict_agent.py` — find_alternatives()
 
 ### Flow 8: Email Intelligence Pipeline (Non-Calendar Emails)
 
@@ -587,9 +579,9 @@ sequenceDiagram
     Poller->>EmailA: process_email(email)
     EmailA->>OpenAI: GPT-4o intent classification
     OpenAI-->>EmailA: {intent: "other", summary, ...}
-    EmailA-->>Orchestrator: email_result (intent not in schedule/cancel/reschedule/inquiry)
+    EmailA-->>Orchestrator: email_result (intent not in schedule/reschedule/inquiry/send_email/reply_email)
 
-    Note over Orchestrator: Intent is not calendar-related → route to Email Intelligence
+    Note over Orchestrator: Intent is not matched to a specific handler → route to Email Intelligence
 
     Orchestrator->>IntelA: process_email(email)
     IntelA->>OpenAI: GPT-4o (email_intelligence SYSTEM_PROMPT)
@@ -655,9 +647,10 @@ INCOMING EMAIL
 │    Route by intent   │
 │    ┌─────────────────┤
 │    │ schedule        │ → calendar_agent.process_schedule()
-│    │ cancel          │ → calendar_agent.process_cancel()
 │    │ reschedule      │ → calendar_agent.process_reschedule()
 │    │ inquiry         │ → calendar query
+│    │ send_email      │ → _handle_send_email() → compose + send
+│    │ reply_email     │ → _handle_reply_email() → context-aware reply
 │    │ other           │ → email_intelligence_agent.process_email()
 │    │                 │     ↓
 │    │                 │   insert_email_analysis() → SQLite
@@ -760,17 +753,17 @@ stateDiagram-v2
 | `app/core/logger.py` | ~30 | Event logging | `log_event()` |
 | `app/core/gmail_poller.py` | 143 | Email ingestion | `poll_gmail()` |
 | `app/api/v1/auth.py` | ~252 | User auth | `google_auth_url()`, `callback()`, `me()`, `logout()` |
-| `app/api/v1/chat.py` | ~800 | Chat + dashboard | `chat()`, 6 confirmation endpoints, `dashboard_stats()`, `dashboard_email_stats()`, `dashboard_recent_emails()`, `dashboard_logs()` |
+| `app/api/v1/chat.py` | ~726 | Chat + dashboard | `chat()`, 4 confirmation endpoints, `dashboard_stats()`, `dashboard_email_stats()`, `dashboard_recent_emails()`, `dashboard_logs()` |
 | `app/api/v1/webhook.py` | ~30 | Webhook | `gmail_webhook()` |
 | `app/agents/spam_filter.py` | ~120 | Spam detection | `is_spam()` |
 | `app/agents/email_agent.py` | ~140 | Intent classification | `process_email()` |
 | `app/agents/email_intelligence_agent.py` | ~225 | Email intelligence | `process_email()` — classifies non-calendar emails, generates summaries, extracts structured data |
-| `app/agents/calendar_agent.py` | 301 | Calendar operations | `process_schedule()`, `process_cancel()`, `process_reschedule()` |
+| `app/agents/calendar_agent.py` | ~260 | Calendar operations | `process_schedule()`, `process_reschedule()` |
 | `app/agents/conflict_agent.py` | ~175 | Alternative slots | `find_alternatives()` |
-| `app/agents/chat_agent.py` | ~200 | Chat interaction | `chat()`, `evaluate_email()` |
+| `app/agents/chat_agent.py` | ~200 | Chat + email assistant | `chat()`, `evaluate_email()` |
 | `app/agents/notification_agent.py` | ~380 | Email reply | `send_notification()`, `send_reply()` |
 | `app/agents/evaluation_agent.py` | ~120 | Quality evaluation | `evaluate_and_retry()` |
-| `app/orchestrator/orchestrator.py` | ~200 | Pipeline routing | `run_pipeline()` — routes calendar emails to calendar workflow, non-calendar emails to Email Intelligence Agent |
+| `app/orchestrator/orchestrator.py` | ~200 | Pipeline routing | `run_pipeline()` — routes to calendar, email intelligence, send_email, reply_email handlers |
 | `app/db/sqlite.py` | ~250 | Database layer | `init_db()`, `get_logs()`, `get_stats()`, user + pending CRUD, `insert_email_analysis()`, `get_email_analysis()`, `get_email_statistics()`, `get_recent_emails()` |
 | `app/schemas/email.py` | ~20 | Data models | `EmailSchema` |
 | `app/chat_ui.html` | 1623+ | Frontend SPA | Chat UI + Dashboard (vanilla JS) |
@@ -781,7 +774,6 @@ stateDiagram-v2
 |-------|---------|-------------|
 | `system_logs` | Event audit trail | id, agent, status, payload, timestamp |
 | `pending_invites` | Pending confirmations | id, token, email, event_id, event_data, timestamp |
-| `pending_cancels` | Pending cancellations | id, token, email, event_id, event_data, timestamp |
 | `pending_reschedules` | Pending reschedules | id, token, email, event_id, event_data, timestamp |
 | `users` | User accounts | id, user_id, email, name, picture, access_token, refresh_token, token_expiry, created_at |
 | `email_intelligence` (NEW) | Email analytics | id, email_id, sender, subject, category, summary, extracted_data_json, importance_score, processed_at |
@@ -791,15 +783,15 @@ stateDiagram-v2
 | Agent | File | LLM | Purpose |
 |-------|------|-----|---------|
 | Spam Filter | `spam_filter.py` | No | Rule-based spam detection |
-| Email Agent | `email_agent.py` | GPT-4o | Intent classification (schedule/cancel/reschedule/inquiry/other) |
+| Email Agent | `email_agent.py` | GPT-4o | Intent classification (schedule/reschedule/inquiry/send_email/reply_email/other) |
 | **Email Intelligence Agent** (NEW) | `email_intelligence_agent.py` | GPT-4o | Classify non-calendar emails, generate summaries, extract structured data |
 | Calendar Agent | `calendar_agent.py` | No | Calendar CRUD operations |
 | Conflict Agent | `conflict_agent.py` | No | Find alternative time slots |
-| Chat Agent | `chat_agent.py` | GPT-4o | Interactive chat scheduling |
+| Chat Agent | `chat_agent.py` | GPT-4o | Interactive chat + email assistant routing |
 | Notification Agent | `notification_agent.py` | No | Send email replies |
 | Evaluation Agent | `evaluation_agent.py` | GPT-4o (via Chat) | Quality evaluation with retry |
 
-### API Endpoints (17 total)
+### API Endpoints (16 total)
 
 | # | Route | Method | Auth | Purpose |
 |---|-------|--------|------|---------|
@@ -810,12 +802,12 @@ stateDiagram-v2
 | 5 | `/auth/me` | GET | JWT cookie | Current user info |
 | 6 | `/auth/logout` | POST | None | Clear cookie |
 | 7 | `/chat` | POST | JWT cookie | Interactive chat |
-| 8-12 | `/chat/{confirm,decline,reschedule/confirm,reschedule/decline,cancel/confirm}/{token}` | GET | Token | Action links (5 endpoints) |
-| 13 | `/dashboard/stats` | GET | JWT cookie | System statistics |
-| 14 | `/dashboard/logs` | GET | JWT cookie | Event logs (paginated) |
-| 15 | `/dashboard/email-stats` (NEW) | GET | JWT cookie | Email category statistics |
-| 16 | `/dashboard/recent-emails` (NEW) | GET | JWT cookie | Recent analyzed emails |
-| 17 | `/webhook/gmail` | POST | None | Gmail push notification |
+| 8-11 | `/chat/{confirm,decline,reschedule/confirm,reschedule/decline}/{token}` | GET | Token | Action links (4 endpoints) |
+| 12 | `/dashboard/stats` | GET | JWT cookie | System statistics |
+| 13 | `/dashboard/logs` | GET | JWT cookie | Event logs (paginated) |
+| 14 | `/dashboard/email-stats` (NEW) | GET | JWT cookie | Email category statistics |
+| 15 | `/dashboard/recent-emails` (NEW) | GET | JWT cookie | Recent analyzed emails |
+| 16 | `/webhook/gmail` | POST | None | Gmail push notification |
 
 ---
 

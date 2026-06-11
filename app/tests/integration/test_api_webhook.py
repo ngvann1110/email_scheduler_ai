@@ -57,29 +57,6 @@ class TestWebhookEndpoint:
         assert response.json()["flow"] == "inquiry_flow"
 
     @patch("app.api.v1.webhook.run_pipeline", new_callable=AsyncMock)
-    def test_webhook_cancel_flow(self, mock_pipeline, test_client):
-        """Should handle cancel flow correctly."""
-        mock_pipeline.return_value = {
-            "type": "cancel_flow",
-            "data": {
-                "email": {"intent": "cancel"},
-                "calendar": {"status": "cancelled"},
-            },
-        }
-
-        response = test_client.post(
-            "/webhook/gmail",
-            json={
-                "sender": "user@example.com",
-                "subject": "Cancel meeting",
-                "body": "Please cancel my 9am Monday meeting",
-                "timestamp": "2026-06-06T10:00:00+07:00",
-            },
-        )
-        assert response.status_code == 200
-        assert response.json()["flow"] == "cancel_flow"
-
-    @patch("app.api.v1.webhook.run_pipeline", new_callable=AsyncMock)
     def test_webhook_reschedule_flow(self, mock_pipeline, test_client):
         """Should handle reschedule flow correctly."""
         mock_pipeline.return_value = {

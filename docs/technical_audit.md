@@ -2,6 +2,7 @@
 
 > **Generated:** 2026-06-08 | **Repository:** `email_scheduler_ai`
 > **Commit:** `c9e73fcd6d87143db59356297135404a8123f3f1`
+> **Updated:** 2026-06-11 — Added Email Assistant (Send/Reply), Email Intelligence Agent, Analytics Dashboard
 
 ---
 
@@ -9,7 +10,7 @@
 
 ### Problem Solved
 
-Email Scheduler AI automates meeting scheduling via email. Users send an email requesting a meeting — the system reads it, classifies intent via GPT-4o, creates/updates/cancels events on Google Calendar, detects conflicts, proposes alternatives, and sends confirmation or conflict emails back. A chat UI provides an interactive alternative to email. Non-calendar business emails are analyzed by the Email Intelligence Agent for categorization, summarization, and information extraction — powering an analytics dashboard. The system eliminates the manual back-and-forth of scheduling meetings while providing email intelligence insights.
+Email Scheduler AI automates meeting scheduling and email composition via email. Users send an email requesting a meeting — the system reads it, classifies intent via GPT-4o, creates/updates events on Google Calendar, detects conflicts, proposes alternatives, and sends confirmation or conflict emails back. Users can also request the system to compose new emails or reply to existing email threads. A chat UI provides an interactive alternative to email. Non-calendar business emails are analyzed by the Email Intelligence Agent for categorization, summarization, and information extraction — powering an analytics dashboard. The system eliminates the manual back-and-forth of scheduling meetings and composing emails while providing email intelligence insights.
 
 **Code evidence:**
 
@@ -19,7 +20,7 @@ Email Scheduler AI automates meeting scheduling via email. Users send an email r
 | `app/agents/email_agent.py` | 73–121 | `process_email()` uses GPT-4o to classify intent |
 | `app/agents/calendar_agent.py` | 68–120 | `process_schedule()` creates Google Calendar events |
 | `app/agents/notification_agent.py` | 309–369 | `send_notification()` replies with confirmation/conflict emails |
-| `app/agents/chat_agent.py` | 151–200 | `chat()` provides interactive scheduling via LLM |
+| `app/agents/chat_agent.py` | 151–200 | `chat()` provides interactive scheduling and email composition via LLM |
 | `app/agents/email_intelligence_agent.py` | ~225 | `process_email()` classifies non-calendar emails, generates summaries, extracts structured data |
 
 ### Target Users
@@ -28,18 +29,21 @@ Email Scheduler AI automates meeting scheduling via email. Users send an email r
 |-----------|-------------------|---------------|
 | Email users | Send email to system Gmail account | None |
 | Chat UI users | `GET /ui` → interactive chat | JWT cookie |
-| Meeting invitees | Click confirmation/cancel/reschedule links in email | Token-based (no login) |
+| Meeting invitees | Click confirmation/reschedule links in email | Token-based (no login) |
 
 ### Primary Workflows
 
 | Workflow | Trigger | Entry Point | Outcome |
 |----------|---------|-------------|---------|
 | Email → Schedule | Incoming email | `gmail_poller.py:59` | Calendar event created, confirmation sent |
-| Email → Cancel | Incoming email requesting cancellation | Same | Event deleted, cancellation sent |
 | Email → Reschedule | Incoming email requesting time change | Same | Event updated, reschedule sent |
 | Email → Conflict | Incoming email with occupied slot | Same → conflict agent | Alternatives proposed, conflict email sent |
 | Email → Spam | Incoming email matching spam patterns | `gmail_poller.py:99` | Ignored, marked read |
+| Email → Send | Incoming email requesting email composition | Same | Email composed and sent |
+| Email → Reply | Incoming email requesting reply | Same | Reply composed and sent |
 | Chat → Schedule | Authenticated user | `api/v1/chat.py:339` | Interactive → calendar event |
+| Chat → Send Email | Authenticated user | `api/v1/chat.py:339` | Interactive → email composed and sent |
+| Chat → Reply Email | Authenticated user | `api/v1/chat.py:339` | Interactive → reply composed and sent |
 | Confirmation Link | Invitee clicks link | `api/v1/chat.py:458-639` | Pending invite resolved |
 | Webhook → Schedule | Gmail push notification | `api/v1/webhook.py:9` | Pipeline run immediately |
 | Email → Intelligence | Non-calendar email (intent="other") | `orchestrator.py` → `email_intelligence_agent.py` | Email categorized, summarized, stored in SQLite |
@@ -161,8 +165,8 @@ See `docs/architecture_overview.md` for Mermaid diagrams and data flow walkthrou
 | Python | 3.10+ | Runtime | Entire backend | `requirements.txt` |
 | FastAPI | unpinned | Web framework | API routing, middleware, startup | `main.py:12-60` |
 | Uvicorn | unpinned | ASGI server | App entry point | `main.py:67-68` |
-| OpenAI SDK | unpinned | LLM API client | Intent classification, chat, evaluation | `email_agent.py:12`, `chat_agent.py:12` |
-| GPT-4o | — | LLM model | Email classification, chat, evaluation | `email_agent.py:95`, `chat_agent.py:155` |
+| OpenAI SDK | unpinned | LLM API client | Intent classification, chat, evaluation, email composition | `email_agent.py:12`, `chat_agent.py:12` |
+| GPT-4o | — | LLM model | Email classification, chat, evaluation, email generation | `email_agent.py:95`, `chat_agent.py:155` |
 | google-api-python-client | unpinned | Google service client | Calendar v3, Gmail v1 | `auth.py:62-72` |
 | google-auth-oauthlib | unpinned | OAuth flows | System + user authentication | `auth.py:79`, `auth.py:32` |
 | PyJWT | unpinned | JWT tokens | User sessions, confirmation tokens | `jwt_auth.py:4` |
@@ -184,7 +188,7 @@ See `docs/architecture_overview.md` for Mermaid diagrams and data flow walkthrou
 |--------------|----------------|-------------|
 | `app/main.py` | Application entry point. Creates FastAPI, wires routers, starts background poller, serves UI + health. | `FastAPI()`, `include_router`, `asyncio.create_task(poll_gmail())`, `@app.get("/ui")`, `@app.get("/health")` |
 | `app/core/` | Core infrastructure: config, auth, JWT, logging, polling. | `config.py:Settings`, `auth.py:get_calendar_service/get_gmail_service`, `jwt_auth.py:create_token/decode_token/get_current_user`, `logger.py:log_event`, `gmail_poller.py:poll_gmail` |
-| `app/api/v1/` | HTTP API layer by domain. | `auth.py:login/callback/me/logout`, `chat.py:chat/confirm/decline/reschedule/cancel/dashboard`, `webhook.py:gmail_webhook` |
+| `app/api/v1/` | HTTP API layer by domain. | `auth.py:login/callback/me/logout`, `chat.py:chat/confirm/decline/reschedule/dashboard`, `webhook.py:gmail_webhook` |
 | `app/agents/` | AI agent implementations. Stateless, single-responsibility. | 8 agents — see Agent System (Section 9) |
 | `app/orchestrator/` | Pipeline orchestration, routing, agent dispatch. | `orchestrator.py:run_pipeline()` |
 | `app/schemas/` | Pydantic data models. | `email.py:EmailSchema` |
@@ -236,7 +240,7 @@ No rate limiting, no request logging middleware, no compression. Authentication 
 
 `@app.on_event("startup")` executes:
 
-1. **`init_db()`** (`db/sqlite.py:68-118`) — creates 6 tables if they don't exist: `system_logs`, `pending_invites`, `pending_cancels`, `pending_reschedules`, `users`, `email_intelligence`
+1. **`init_db()`** (`db/sqlite.py:68-118`) — creates 6 tables if they don't exist: `system_logs`, `pending_invites`, `pending_reschedules`, `users`, `email_intelligence`
 
 2. **`asyncio.create_task(poll_gmail())`** — launches background polling loop as long-running coroutine
 
@@ -260,7 +264,7 @@ Each agent module is independently importable. Cross-agent communication goes th
 |---------|-----------|---------|
 | `spam_filter` | Nothing | `is_spam(email) → (bool, str)` |
 | `email_agent` | `config`, OpenAI SDK | `process_email(email) → dict` |
-| `calendar_agent` | `auth`, `config` | `process_schedule/cancel/reschedule() → dict` |
+| `calendar_agent` | `auth`, `config` | `process_schedule/reschedule() → dict` |
 | `chat_agent` | `config`, OpenAI SDK, `auth` (query only) | `chat() → {reply, action}`, `evaluate_email() → dict` |
 | `conflict_agent` | Google Calendar API (own auth) | `find_alternatives() → dict` |
 | `notification_agent` | `auth` (Gmail service) | `send_notification/send_reply() → dict` |
@@ -281,19 +285,18 @@ Each agent module is independently importable. Cross-agent communication goes th
 | 4 | `/auth/callback` | GET | None (state) | OAuth callback | `api/v1/auth.py:110` |
 | 5 | `/auth/me` | GET | JWT cookie | Current user info | `api/v1/auth.py:226` |
 | 6 | `/auth/logout` | POST | None | Clear cookie | `api/v1/auth.py:241` |
-| 7 | `/chat` | POST | JWT cookie | Interactive chat | `api/v1/chat.py:339` |
+| 7 | `/chat` | POST | JWT cookie | Interactive chat (schedule, reschedule, send_email, reply_email, query) | `api/v1/chat.py:339` |
 | 8 | `/chat/confirm/{token}` | GET | Token | Confirm invite | `api/v1/chat.py:458` |
 | 9 | `/chat/decline/{token}` | GET | Token | Decline invite | `api/v1/chat.py:497` |
 | 10 | `/chat/reschedule/confirm/{token}` | GET | Token | Confirm reschedule | `api/v1/chat.py:520` |
 | 11 | `/chat/reschedule/decline/{token}` | GET | Token | Decline reschedule | `api/v1/chat.py:594` |
-| 12 | `/chat/cancel/confirm/{token}` | GET | Token | Confirm cancellation | `api/v1/chat.py:639` |
-| 13 | `/dashboard/stats` | GET | JWT cookie | System statistics | `api/v1/chat.py:693` |
-| 14 | `/dashboard/logs` | GET | JWT cookie | Event logs (paginated) | `api/v1/chat.py:715` |
-| 15 | `/dashboard/email-stats` | GET | JWT cookie | Email category statistics | `api/v1/chat.py:dashboard_email_stats` |
-| 16 | `/dashboard/recent-emails` | GET | JWT cookie | Recent analyzed emails (paginated, sortable) | `api/v1/chat.py:dashboard_recent_emails` |
-| 17 | `/webhook/gmail` | POST | None | Gmail push notification | `api/v1/webhook.py:9` |
+| 12 | `/dashboard/stats` | GET | JWT cookie | System statistics | `api/v1/chat.py:693` |
+| 13 | `/dashboard/logs` | GET | JWT cookie | Event logs (paginated) | `api/v1/chat.py:715` |
+| 14 | `/dashboard/email-stats` | GET | JWT cookie | Email category statistics | `api/v1/chat.py:dashboard_email_stats` |
+| 15 | `/dashboard/recent-emails` | GET | JWT cookie | Recent analyzed emails (paginated, sortable) | `api/v1/chat.py:dashboard_recent_emails` |
+| 16 | `/webhook/gmail` | POST | None | Gmail push notification | `api/v1/webhook.py:9` |
 
-**Total: 17 endpoints** across 4 route groups.
+**Total: 16 endpoints** across 4 route groups.
 
 ---
 
@@ -372,12 +375,11 @@ POST /auth/logout → delete "access_token" cookie → 200 OK
 
 ### Token-Based Confirmation Links (No Login)
 
-Six endpoints use JWT tokens in URLs for email link actions:
+Four endpoints use JWT tokens in URLs for email link actions:
 - `/chat/confirm/{token}` — `chat.py:458`
 - `/chat/decline/{token}` — `chat.py:497`
 - `/chat/reschedule/confirm/{token}` — `chat.py:520`
 - `/chat/reschedule/decline/{token}` — `chat.py:594`
-- `/chat/cancel/confirm/{token}` — `chat.py:639`
 
 Tokens are decoded, then the corresponding pending record is looked up in SQLite and acted upon.
 
@@ -413,10 +415,6 @@ Tokens are decoded, then the corresponding pending record is looked up in SQLite
 | `timestamp` | TEXT | NOT NULL DEFAULT (datetime('now')) | Creation time |
 
 **Access:** `insert_pending_invite()`, `get_pending_invite()`, `delete_pending_invite()`
-
-### Table: `pending_cancels`
-
-Identical structure to `pending_invites`. Used for cancellation pending confirmations.
 
 ### Table: `pending_reschedules`
 
@@ -460,7 +458,6 @@ Identical structure to `pending_invites`. Used for reschedule pending confirmati
 |-------|---------|---------|------|
 | `system_logs` | Append-only | Event audit trail | C, R |
 | `pending_invites` | Transient | Pending confirmations | C, R, D |
-| `pending_cancels` | Transient | Pending cancellations | C, R, D |
 | `pending_reschedules` | Transient | Pending reschedules | C, R, D |
 | `users` | Accumulating | User accounts | C, R |
 | `email_intelligence` | Append-only | Email analytics | C, R |
@@ -480,7 +477,7 @@ Identical structure to `pending_invites`. Used for reschedule pending confirmati
 #### 2. Email Classification Agent
 - **File:** `app/agents/email_agent.py:73-125` — `process_email()`
 - **Model:** GPT-4o with `response_format={"type": "json_object"}`, temperature=0
-- **Intents:** schedule, cancel, reschedule, inquiry, other
+- **Intents:** schedule, reschedule, query, send_email, reply_email, other
 - **Output:** `{intent, summary, time, old_time, location, attendees, confidence, raw_time_text}`
 - **Failure:** Try/except → `_fallback(reason)` returns intent="other"
 
@@ -488,7 +485,6 @@ Identical structure to `pending_invites`. Used for reschedule pending confirmati
 - **File:** `app/agents/calendar_agent.py` (301 lines)
 - **Functions:**
   - `process_schedule()` — `68-120`: freebusy check → create event
-  - `process_cancel()` — `123-194`: find event (±1h) → delete
   - `process_reschedule()` — `197-301`: find old, check new slot → update
 - **Helpers:** `_check_conflict()` (`18-28`), `_create_event()` (`31-49`), `_find_events_by_time()` (`52-64`)
 - **Time zone:** `Asia/Ho_Chi_Minh`, Calendar ID: `"primary"`
@@ -501,12 +497,12 @@ Identical structure to `pending_invites`. Used for reschedule pending confirmati
 #### 5. Chat Agent
 - **File:** `app/agents/chat_agent.py:151-200` — `chat()`
 - **Model:** GPT-4o
-- **Actions:** `<action>` XML tags with JSON: schedule, cancel, reschedule, query_calendar
+- **Actions:** `<action>` XML tags with JSON: schedule, reschedule, query_calendar, send_email, reply_email
 - **Also:** `evaluate_email()` (`123-148`) — judges pipeline output quality
 
 #### 6. Notification Agent
 - **File:** `app/agents/notification_agent.py:309-369` — `send_notification()`
-- **Templates (6):** success, conflict, cancel, cancel_not_found, reschedule, reschedule_not_found, error
+- **Templates (5):** success, conflict, reschedule, reschedule_not_found, error
 - **Format:** Plain-text UTF-8, Vietnamese, Unicode box-drawing
 - **Send:** Gmail API `users().messages().send()` with base64url encoding
 
@@ -551,10 +547,11 @@ Routing logic:
 email_agent.process_email(email)
     │
     ├─ intent="schedule" → calendar_agent.process_schedule()
-    ├─ intent="cancel" → calendar_agent.process_cancel()
     ├─ intent="reschedule" → calendar_agent.process_reschedule()
-    ├─ intent="inquiry" → query calendar events
-    └─ intent="other" → skip (no action)
+    ├─ intent="query" → query calendar events
+    ├─ intent="send_email" → handle send email composition
+    ├─ intent="reply_email" → handle reply email composition
+    └─ intent="other" → skip (no action, or process via email_intelligence_agent)
     │
     ├─ if calendar_result["status"] == "conflict"
     │   → conflict_agent.find_alternatives()
@@ -641,15 +638,10 @@ Query excludes `settings.ORGANIZER_EMAIL` to prevent self-processing loops.
 
 `service.events().update()` — modifies start/end fields.
 
-### Event Deletion
-**File:** `app/agents/calendar_agent.py:164-168` — in `process_cancel()`
-
-`service.events().delete()` with `sendUpdates="all"`.
-
 ### Event Discovery
 **File:** `app/agents/calendar_agent.py:52-64` — `_find_events_by_time()`
 
-Searches ±1h window around target time. Returns list — but only `events[0]` is used (line 159, 253).
+Searches ±1h window around target time. Returns list.
 
 ### Conflict Checking
 **File:** `app/agents/calendar_agent.py:18-28` — `_check_conflict()`
@@ -688,7 +680,7 @@ JS checks for `access_token` cookie on load. `credentials: "include"` on all `fe
 
 ### API Communication
 - `POST /chat` — send message, receive reply + action
-- `GET /chat/{confirm,decline,cancel,reschedule}/{token}` — action links
+- `GET /chat/{confirm,decline,reschedule}/{token}` — action links
 - `GET /dashboard/stats`, `GET /dashboard/logs` — dashboard data
 - `GET /auth/me` — verify login state
 
@@ -707,15 +699,16 @@ See `docs/feature_inventory.md` for the complete listing.
 | Interactive Chat Scheduling | `POST /chat` | `agents/chat_agent.py:chat()` |
 | Email Intent Classification | Pipeline entry | `agents/email_agent.py:process_email()` |
 | Calendar Event Create | Pipeline schedule | `agents/calendar_agent.py:process_schedule()` |
-| Calendar Event Cancel | Pipeline cancel | `agents/calendar_agent.py:process_cancel()` |
 | Calendar Event Reschedule | Pipeline reschedule | `agents/calendar_agent.py:process_reschedule()` |
+| Email Composition (Send) | Pipeline send_email | `agents/notification_agent.py:send_notification()` |
+| Email Reply Assistant | Pipeline reply_email | `agents/notification_agent.py:send_notification()` |
 | Conflict Detection | During create/reschedule | `calendar_agent.py:_check_conflict()` |
 | Alternative Slot Finder | After conflict | `agents/conflict_agent.py:find_alternatives()` |
 | Notification Emails | After every pipeline | `agents/notification_agent.py:send_notification()` |
 | Spam Filtering | Before pipeline | `agents/spam_filter.py:is_spam()` |
 | Gmail Polling | Startup | `core/gmail_poller.py:poll_gmail()` |
 | Webhook Ingestion | `POST /webhook/gmail` | `api/v1/webhook.py` |
-| Confirmation Links | `GET /chat/{action}/{token}` | `api/v1/chat.py` (6 endpoints) |
+| Confirmation Links | `GET /chat/{action}/{token}` | `api/v1/chat.py` (4 endpoints) |
 | Pipeline Evaluation + Retry | Wraps pipeline | `agents/evaluation_agent.py:evaluate_and_retry()` |
 | System Dashboard | `GET /dashboard/*` | `api/v1/chat.py` + `db/sqlite.py` |
 | Audit Logging | Throughout pipeline | `core/logger.py:log_event()` |
@@ -738,10 +731,11 @@ See `docs/feature_inventory.md` for the complete listing.
 See `docs/architecture_overview.md` for detailed step-by-step walkthroughs of:
 1. Login Flow
 2. Schedule Meeting Flow (Email)
-3. Cancel Meeting Flow
-4. Reschedule Flow
-5. Incoming Email Flow (Webhook)
-6. Dashboard Statistics Flow
+3. Send Email Flow
+4. Reply Email Flow
+5. Reschedule Flow
+6. Incoming Email Flow (Webhook)
+7. Dashboard Statistics Flow
 
 ---
 
@@ -756,7 +750,7 @@ See `docs/architecture_overview.md` for detailed step-by-step walkthroughs of:
 
 | Test File | Target | Key Focus |
 |-----------|--------|-----------|
-| `test_calendar_agent.py` | `calendar_agent.py` | Schedule, cancel, reschedule, conflicts |
+| `test_calendar_agent.py` | `calendar_agent.py` | Schedule, reschedule, conflicts |
 | `test_chat_agent.py` | `chat_agent.py` | Chat responses, action extraction |
 | `test_conflict_agent.py` | `conflict_agent.py` | Alternative slots, working hours |
 | `test_email_agent.py` | `email_agent.py` | Intent classification, time parsing |
@@ -783,7 +777,7 @@ See `docs/architecture_overview.md` for detailed step-by-step walkthroughs of:
 
 | Test File | Key Scenarios |
 |-----------|--------------|
-| `test_full_pipeline.py` | Schedule, cancel, reschedule, spam, inquiry, retry on failure |
+| `test_full_pipeline.py` | Schedule, reschedule, send_email, reply_email, spam, inquiry, retry on failure |
 
 ### Frontend Tests
 `test_chat_ui.py` — **empty file (0 bytes)** — no frontend tests implemented.
@@ -860,7 +854,7 @@ No deployment step. No branch filtering. CI runs on every push and PR.
 | 3 | No rate limiting | No rate limit middleware or decorators | High |
 | 4 | No token revocation | Logout only clears cookie, JWT still valid | Medium |
 | 5 | No email threading | No `In-Reply-To` or `References` headers | Low |
-| 6 | Cancel/reschedule uses first match only | `events[0]` used, no disambiguation | Medium |
+| 6 | Reschedule uses first match only | `events[0]` used, no disambiguation | Medium |
 | 7 | No recurring meeting support | No `recurrence` field in event creation | Medium |
 | 8 | Fixed 60-minute duration | `DEFAULT_DURATION = 60`, not configurable | Low |
 | 9 | Keyword-only spam filter | No ML, no sender reputation | Low |
@@ -878,10 +872,10 @@ No deployment step. No branch filtering. CI runs on every push and PR.
 ## 20. Executive Summary
 
 ### Maturity Level
-**Prototype / Alpha.** Functional proof-of-concept for AI-driven email scheduling. All core workflows implemented and testable. Architecture is clean and modular. Not production-ready for multi-user deployment.
+**Prototype / Alpha.** Functional proof-of-concept for AI-driven email scheduling and email composition assistance. All core workflows implemented and testable. Architecture is clean and modular. Not production-ready for multi-user deployment.
 
-### Implemented Capabilities (17 features)
-Dual-input scheduling (email + chat), full Calendar CRUD, conflict resolution, automated emails (6 templates), LLM evaluation with retry, Google OAuth + JWT, audit logging, dashboard, spam filtering, webhook ingestion.
+### Implemented Capabilities (18 features)
+Dual-input scheduling (email + chat), full Calendar CRUD (schedule + reschedule), email composition (send + reply), conflict resolution, automated emails (5 templates), LLM evaluation with retry, Google OAuth + JWT, audit logging, dashboard, spam filtering, webhook ingestion.
 
 ### Architectural Strengths
 1. Clean agent separation with single responsibilities

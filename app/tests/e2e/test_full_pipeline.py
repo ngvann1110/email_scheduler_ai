@@ -4,7 +4,7 @@ End-to-end tests for the full email processing pipeline.
 These tests verify the complete flow:
 1. Email is received via webhook
 2. Email is processed by email_agent (intent parsing)
-3. Calendar event is created/cancelled/rescheduled
+3. Calendar event is created/rescheduled
 4. Notification is sent back to the sender
 
 All external APIs are mocked. These tests verify the integration
@@ -155,67 +155,6 @@ class TestFullSchedulePipeline:
 
         assert result["type"] == "schedule_flow"
         assert result["data"]["calendar"]["status"] == "conflict"
-        assert result["data"]["notification"]["status"] == "sent"
-
-
-class TestFullCancelPipeline:
-    """End-to-end test: email → cancel → notification."""
-
-    @patch("app.agents.email_agent.client")
-    @patch("app.agents.calendar_agent._get_service")
-    @patch("app.agents.notification_agent._get_gmail_service")
-    @pytest.mark.asyncio
-    async def test_full_cancel_flow(self, mock_noti_service, mock_cal_service, mock_email_client):
-        """Complete cancel flow should cancel event and send notification."""
-        mock_email_client.chat.completions.create.return_value = MockChatCompletion(
-            json.dumps({
-                "intent": "cancel",
-                "summary": "Cancel Monday meeting",
-                "time": "2026-06-10T09:00:00",
-                "location": None,
-                "attendees": [],
-                "confidence": 0.95,
-                "raw_time_text": "9am Monday",
-            })
-        )
-
-        svc = mock_cal_service.return_value
-
-        # Mock calendar - find and delete event
-        mock_events_list = MagicMock()
-        mock_events_list.execute.return_value = {
-            "items": [{
-                "id": "evt_cancel_001",
-                "summary": "Monday meeting",
-                "start": {"dateTime": "2026-06-10T09:00:00+07:00"},
-                "attendees": [{"email": "user@example.com"}],
-            }]
-        }
-        svc.events.return_value.list.return_value = mock_events_list
-
-        mock_delete = MagicMock()
-        mock_delete.execute.return_value = {}
-        svc.events.return_value.delete.return_value = mock_delete
-
-        # Mock notification
-        mock_send = MagicMock()
-        mock_send.execute.return_value = {"id": "msg_e2e_003"}
-        mock_noti_service.users.return_value.messages.return_value.send.return_value = mock_send
-
-        from app.orchestrator.orchestrator import run_pipeline
-        from app.schemas.email import EmailSchema
-
-        email = EmailSchema(
-            sender="user@example.com",
-            subject="Cancel meeting",
-            body="Please cancel my 9am Monday meeting",
-            timestamp="2026-06-06T10:00:00+07:00",
-        )
-
-        result = await run_pipeline(email)
-
-        assert result["type"] == "cancel_flow"
-        assert result["data"]["calendar"]["status"] == "cancelled"
         assert result["data"]["notification"]["status"] == "sent"
 
 

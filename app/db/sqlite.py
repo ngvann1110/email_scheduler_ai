@@ -88,15 +88,6 @@ def init_db():
     """)
 
     cur.execute("""
-    CREATE TABLE IF NOT EXISTS pending_cancels (
-        token TEXT PRIMARY KEY,
-        action TEXT,
-        status TEXT DEFAULT 'pending',
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-    """)
-
-    cur.execute("""
     CREATE TABLE IF NOT EXISTS pending_reschedules (
         token TEXT PRIMARY KEY,
         action TEXT,

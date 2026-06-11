@@ -25,9 +25,9 @@ class TestExtractJson:
         assert result["time"] == "2026-06-10T09:00:00"
 
     def test_extract_json_with_surrounding_text(self):
-        raw = 'Here is the result:\n{"intent": "cancel"}\nEnd.'
+        raw = 'Here is the result:\n{"intent": "send_email"}\nEnd.'
         result = _extract_json(raw)
-        assert result["intent"] == "cancel"
+        assert result["intent"] == "send_email"
 
     def test_extract_json_with_markdown_code_block(self):
         raw = '```json\n{"intent": "reschedule", "old_time": "2026-06-10T09:00:00", "time": "2026-06-11T10:00:00"}\n```'

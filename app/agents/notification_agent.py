@@ -125,60 +125,6 @@ Trân trọng,
     return msg
 
 
-def _build_cancel_email(to, subject, calendar_result, email_result) -> MIMEMultipart:
-    event_title = calendar_result.get("event_title", "Cuộc họp")
-    time_str = _format_datetime(email_result.get("time", ""))
-    clean_subj = _decode_subject(subject)
-
-    body = f"""Xin chào,
-
-Hệ thống đã xử lý yêu cầu huỷ lịch của bạn.
-
-━━━━━━━━━━━━━━━━━━━━━━━━
-❌ XÁC NHẬN HUỶ LỊCH HỌP
-━━━━━━━━━━━━━━━━━━━━━━━━
-📌 Lịch đã huỷ : {event_title}
-🕐 Thời gian   : {time_str}
-✅ Trạng thái  : Đã xoá khỏi Google Calendar
-
-Nếu muốn đặt lịch mới, vui lòng gửi email với thời gian mong muốn.
-
-Trân trọng,
-{SENDER_NAME} 🤖
-"""
-    msg = MIMEMultipart()
-    msg["To"] = to
-    msg["Subject"] = f"Re: {clean_subj} — Da huy lich hop"
-    msg.attach(MIMEText(body, "plain", "utf-8"))
-    return msg
-
-
-def _build_cancel_not_found_email(to, subject, calendar_result, email_result) -> MIMEMultipart:
-    time_str = _format_datetime(email_result.get("time", ""))
-    clean_subj = _decode_subject(subject)
-
-    body = f"""Xin chào,
-
-Hệ thống đã nhận yêu cầu huỷ lịch của bạn nhưng không tìm thấy lịch phù hợp.
-
-━━━━━━━━━━━━━━━━━━━━━━━━
-⚠️  KHÔNG TÌM THẤY LỊCH
-━━━━━━━━━━━━━━━━━━━━━━━━
-🕐 Thời gian yêu cầu: {time_str}
-❌ Không có lịch họp nào vào khung giờ này.
-
-Vui lòng kiểm tra lại thời gian hoặc liên hệ trực tiếp.
-
-Trân trọng,
-{SENDER_NAME} 🤖
-"""
-    msg = MIMEMultipart()
-    msg["To"] = to
-    msg["Subject"] = f"Re: {clean_subj} — Khong tim thay lich hop"
-    msg.attach(MIMEText(body, "plain", "utf-8"))
-    return msg
-
-
 def _build_reschedule_email(to, subject, calendar_result, email_result) -> MIMEMultipart:
     event_title = calendar_result.get('event_title', 'Cuoc hop')
     old_time = _format_datetime(calendar_result.get('old_start', ''))
@@ -339,12 +285,6 @@ def send_notification(
                 to, subject, calendar_result, email_result)
         elif status == "rescheduled":
             msg = _build_reschedule_email(
-                to, subject, calendar_result, email_result)
-        elif status == "cancelled":
-            msg = _build_cancel_email(
-                to, subject, calendar_result, email_result)
-        elif status == "not_found":
-            msg = _build_cancel_not_found_email(
                 to, subject, calendar_result, email_result)
         elif status == "conflict":
             msg = _build_conflict_email(
