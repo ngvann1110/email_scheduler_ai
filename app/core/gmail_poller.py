@@ -11,23 +11,27 @@ from app.agents.spam_filter import is_spam
 from app.core.auth import get_gmail_service
 from app.core.config import settings
 from app.core.logger import log_event
+from app.db.sqlite import get_pending_action_by_message_id
 from app.orchestrator.orchestrator import run_pipeline
 from app.schemas.email import EmailSchema
 
 logger = logging.getLogger(__name__)
 
 
-def decode_mime_header(value: str) -> str:
+def decode_mime_header(value) -> str:
     """
     Decode MIME encoded-word headers (RFC 2047) like:
         =?UTF-8?B?QsOBTyBDw4FPIFTJThkgxJDu?=
     back to human-readable Vietnamese text.
 
     Handles mixed encoded + plain text parts.
-    Falls back to original value if decoding fails.
+    Accepts email.header.Header objects and coerces them to str first.
+    Falls back to str(value) if decoding fails.
     """
     if not value:
-        return value
+        return ""
+    if not isinstance(value, str):
+        value = str(value)
     try:
         parts = decode_header(value)
         decoded_parts: list[str] = []
@@ -40,7 +44,7 @@ def decode_mime_header(value: str) -> str:
                 decoded_parts.append(str(part))
         return "".join(decoded_parts).strip()
     except Exception:
-        return value
+        return str(value)
 
 
 def _parse_date_header(mail) -> str:
@@ -90,22 +94,23 @@ def _parse_message(service, msg_id: str) -> dict | None:
             body = mail.get_payload(decode=True).decode(
                 "utf-8", errors="ignore")
 
-        raw_sender = mail.get("From", "")
-        raw_subject = mail.get("Subject", "(no subject)")
+        raw_sender  = str(mail.get("From", "") or "")
+        raw_subject = str(mail.get("Subject", "(no subject)") or "(no subject)")
 
         # decode MIME encoded-words (RFC 2047) → Vietnamese text
-        decoded_sender = decode_mime_header(raw_sender)
+        decoded_sender  = decode_mime_header(raw_sender)
         decoded_subject = decode_mime_header(raw_subject)
 
         # Extract bare email address from "Display Name <email>" format
         _name, addr = parseaddr(decoded_sender)
-        sender_addr = addr or decoded_sender  # fallback to full string
+        sender_addr = str(addr or decoded_sender).strip()
 
         return {
-            "sender":    sender_addr,
-            "subject":   decoded_subject,
-            "body":      body.strip(),
-            "timestamp": _parse_date_header(mail),
+            "sender":           sender_addr,
+            "subject":          decoded_subject,
+            "body":             body.strip(),
+            "timestamp":        _parse_date_header(mail),
+            "gmail_message_id": msg_id,
         }
     except Exception as e:
         logger.error("[Poller] Không parse được email %s: %s", msg_id, e)
@@ -148,6 +153,14 @@ async def poll_gmail():
 
             for msg in messages:
                 msg_id = msg["id"]
+
+                # Guard: skip if a pending_action already tracks this message.
+                # The email stays unread in Gmail until the user confirms via Dashboard.
+                if get_pending_action_by_message_id(msg_id) is not None:
+                    logger.info(
+                        "[Poller] Bỏ qua email đang chờ xử lý | msg_id=%s", msg_id)
+                    continue
+
                 parsed = _parse_message(service, msg_id)
                 if not parsed:
                     continue
@@ -157,9 +170,6 @@ async def poll_gmail():
                     parsed["sender"], parsed["subject"],
                 )
 
-                # Đánh dấu đã đọc trước
-                _mark_as_read(service, msg_id)
-
                 try:
                     email_obj = EmailSchema(**parsed)
 
@@ -168,6 +178,7 @@ async def poll_gmail():
                     if spam:
                         logger.info(
                             "[Poller] ✗ Bỏ qua spam | reason=%s", reason)
+                        _mark_as_read(service, msg_id)
                         log_event(
                             agent="spam_filter",
                             status="spam",
@@ -182,6 +193,13 @@ async def poll_gmail():
                         pipeline_fn=run_pipeline,
                         email=email_obj,
                     )
+
+                    # HITL contract: emails that produced a pending_action stay
+                    # unread in Gmail until the user confirms via the Dashboard.
+                    # Only informational flows (no pending_action) are marked read now.
+                    _HITL_FLOWS = {"schedule_flow", "reschedule_flow", "unclear_flow"}
+                    if final_result.get("type") not in _HITL_FLOWS:
+                        _mark_as_read(service, msg_id)
 
                     log_event(
                         agent="gmail_poller",

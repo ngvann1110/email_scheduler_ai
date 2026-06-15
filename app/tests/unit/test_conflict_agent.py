@@ -22,6 +22,8 @@ from app.agents.conflict_agent import (
 )
 
 
+
+
 class TestIsSlotFree:
     """Tests for _is_slot_free."""
 
@@ -37,6 +39,37 @@ class TestIsSlotFree:
         end = datetime(2026, 6, 10, 10, 0)
         assert _is_slot_free(
             mock_calendar_service_with_conflict, start, end) is False
+
+    def test_converts_naive_ict_to_utc_in_api_call(self):
+        """
+        _is_slot_free receives naive ICT datetimes and must convert them to UTC
+        before querying the freebusy API.
+
+        14:00 ICT (UTC+7) = 07:00 UTC.
+        The pre-fix bug appended literal "Z" to the naive ISO string, sending
+        "2026-04-28T14:00:00Z" (= 21:00 ICT) — 7 hours wrong.
+        """
+        service = MagicMock()
+        service.freebusy.return_value.query.return_value.execute.return_value = {
+            "calendars": {"primary": {"busy": []}}
+        }
+
+        # Naive datetimes representing ICT local time — no tzinfo attached
+        start_ict = datetime(2026, 4, 28, 14, 0, 0)
+        end_ict   = datetime(2026, 4, 28, 15, 0, 0)
+
+        _is_slot_free(service, start_ict, end_ict)
+
+        body = service.freebusy.return_value.query.call_args.kwargs["body"]
+
+        # 14:00 ICT → 07:00 UTC  |  15:00 ICT → 08:00 UTC
+        assert body["timeMin"] == "2026-04-28T07:00:00Z", (
+            f"Expected 07:00Z (14:00 ICT converted to UTC) but got {body['timeMin']}. "
+            "Naive ICT datetimes must not be sent with a literal 'Z' suffix."
+        )
+        assert body["timeMax"] == "2026-04-28T08:00:00Z", (
+            f"Expected 08:00Z but got {body['timeMax']}."
+        )
 
 
 class TestCandidateSlots:

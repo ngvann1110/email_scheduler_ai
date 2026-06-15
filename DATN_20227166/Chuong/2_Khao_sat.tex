@@ -1,0 +1,443 @@
+\documentclass[../DoAn.tex]{subfiles}
+\begin{document}
+\chapter{KHẢO SÁT}
+
+Chương này trình bày kết quả khảo sát hiện trạng các giải pháp quản lý email và lịch làm việc hiện có trên thị trường, từ đó phân tích nhu cầu thực tế của người dùng cá nhân. Trên cơ sở đó, chương xác định các chức năng chính cần phát triển, mô tả tổng quan hệ thống thông qua biểu đồ use case, đặc tả chi tiết các use case quan trọng, và nêu các yêu cầu phi chức năng.
+
+%%% ============================================================
+\section{Khảo sát hiện trạng}
+\label{section:2.1}
+
+\subsection{Phân tích nhu cầu thực tế}
+
+Trong môi trường làm việc và học tập hiện đại, email vẫn là kênh giao tiếp chính thức phổ biến nhất. Theo thống kê của Radicati Group (2024), trung bình mỗi người nhận khoảng 121 email mỗi ngày, trong đó một tỷ lệ đáng kể liên quan đến việc sắp xếp lịch họp, hẹn gặp hoặc các sự kiện cá nhân.
+
+Quá trình xử lý thủ công các email đặt lịch bao gồm nhiều bước lặp đi lặp lại: đọc nội dung email, xác định thời gian và địa điểm được đề xuất, kiểm tra lịch trống, tạo sự kiện trên Google Calendar, sau đó gửi email xác nhận — toàn bộ quy trình này có thể mất từ 3 đến 10 phút cho mỗi yêu cầu.
+
+Đối với người dùng cá nhân — đặc biệt là sinh viên, freelancer, hoặc người đi làm có lịch trình dày — việc quản lý đồng thời email và lịch làm việc trên nhiều nền tảng tách biệt gây ra một số khó khăn cụ thể:
+
+\begin{itemize}
+    \item \textbf{Mất thời gian chuyển đổi ngữ cảnh:} Người dùng phải liên tục di chuyển giữa ứng dụng email (Gmail) và ứng dụng lịch (Google Calendar) để đối chiếu thông tin, dẫn đến giảm năng suất.
+    \item \textbf{Dễ bỏ sót hoặc phản hồi chậm:} Khi lượng email lớn, các yêu cầu đặt lịch có thể bị chìm trong hộp thư đến, khiến người dùng phản hồi muộn hoặc quên hoàn toàn.
+    \item \textbf{Xung đột lịch:} Việc kiểm tra thủ công lịch trống trước khi xác nhận dễ dẫn đến trùng lịch, đặc biệt khi có nhiều yêu cầu trong cùng khoảng thời gian.
+    \item \textbf{Thiếu tự động hóa:} Các tác vụ lặp đi lặp lại như gửi email xác nhận, thông báo thay đổi lịch, hay đề xuất khung giờ thay thế khi xung đột đều phải thực hiện thủ công.
+\end{itemize}
+
+\subsection{Khảo sát các ứng dụng tương tự}
+
+Để xác định vị trí và đóng góp của đồ án, phần này khảo sát các sản phẩm tiêu biểu trong lĩnh vực quản lý email và lịch làm việc thông minh.
+
+\subsubsection{Google Calendar với tính năng Gemini AI}
+
+Google Calendar là ứng dụng quản lý lịch phổ biến nhất hiện nay với hơn 500 triệu người dùng. Trong năm 2024--2025, Google đã tích hợp Gemini AI vào hệ sinh thái Google Workspace, cho phép người dùng tương tác bằng ngôn ngữ tự nhiên để tạo sự kiện nhanh.
+
+\textbf{Ưu điểm:} Tích hợp sẵn trong hệ sinh thái Google, giao diện trực quan, hỗ trợ đa nền tảng. Gemini AI có khả năng hiểu ngữ cảnh phức tạp bằng tiếng Anh.
+
+\textbf{Nhược điểm:} Gemini AI hỗ trợ tiếng Việt còn hạn chế, đặc biệt với các cách diễn đạt thời gian đặc thù (``thứ 3 tuần sau'', ``chiều mai''). Không tự động xử lý email đến — người dùng vẫn phải đọc email rồi tự tay tạo sự kiện. Không có cơ chế phát hiện xung đột tự động khi nhận yêu cầu qua email. Tính năng AI nâng cao yêu cầu gói Workspace trả phí.
+
+\subsubsection{Microsoft Outlook với Copilot}
+
+Microsoft 365 Copilot tích hợp AI vào Outlook, cho phép người dùng tóm tắt email, soạn thảo phản hồi, và quản lý lịch thông qua ngôn ngữ tự nhiên.
+
+\textbf{Ưu điểm:} Tích hợp sâu giữa email và lịch trong cùng một nền tảng. Copilot có thể tóm tắt chuỗi email dài, đề xuất thời gian họp dựa trên lịch trống của nhiều người.
+
+\textbf{Nhược điểm:} Yêu cầu giấy phép Microsoft 365 Copilot (khoảng 30 USD/người/tháng), không phù hợp cho người dùng cá nhân. Hoạt động trong hệ sinh thái Microsoft, không tương thích trực tiếp với Google Calendar/Gmail. Hỗ trợ tiếng Việt chưa đầy đủ. Không thể tuỳ chỉnh logic xử lý theo nhu cầu riêng.
+
+\subsubsection{Calendly}
+
+Calendly là nền tảng đặt lịch hẹn trực tuyến cho phép người dùng chia sẻ link đặt lịch để người khác tự chọn khung giờ trống.
+
+\textbf{Ưu điểm:} Loại bỏ hoàn toàn quy trình trao đổi email qua lại để tìm giờ phù hợp. Tự động đồng bộ với Google Calendar và Outlook Calendar. Hỗ trợ nhiều loại cuộc hẹn: 1-1, nhóm, round-robin.
+
+\textbf{Nhược điểm:} Hoạt động theo mô hình một chiều (chỉ người nhận link mới đặt được lịch), không xử lý được yêu cầu đặt lịch gửi qua email tự do. Không có khả năng hiểu ngôn ngữ tự nhiên. Giao diện hoàn toàn bằng tiếng Anh. Gói miễn phí giới hạn 1 loại sự kiện; tính năng nâng cao từ 10--16 USD/tháng.
+
+\subsubsection{Motion}
+
+Motion là ứng dụng quản lý công việc và lịch trình sử dụng AI để tự động sắp xếp lịch làm việc tối ưu trong ngày.
+
+\textbf{Ưu điểm:} AI tự động phân bổ thời gian cho các task dựa trên độ ưu tiên và deadline. Tự động dời task khi có thay đổi lịch. Kết hợp quản lý task và lịch trong cùng một giao diện.
+
+\textbf{Nhược điểm:} Không tích hợp xử lý email — người dùng phải tự nhập task thủ công. Không hỗ trợ tiếng Việt. Chi phí khoảng 19 USD/tháng, không có gói miễn phí. Tập trung vào quản lý task hơn là xử lý yêu cầu lịch hẹn từ bên ngoài.
+
+\subsubsection{Reclaim.ai}
+
+Reclaim.ai là ứng dụng AI tự động bảo vệ thời gian cá nhân trên Google Calendar bằng cách tìm và giữ chỗ khung giờ phù hợp cho các hoạt động lặp lại.
+
+\textbf{Ưu điểm:} Tự động tìm khung giờ trống tối ưu cho hoạt động cá nhân (focus time, tập thể dục). Smart scheduling tự động tìm giờ phù hợp cho cuộc họp. Tích hợp tốt với Google Calendar và các công cụ quản lý dự án.
+
+\textbf{Nhược điểm:} Không xử lý email đến, chỉ hoạt động dựa trên lịch sẵn có. Không hiểu ngôn ngữ tự nhiên từ email hoặc tin nhắn. Giao diện hoàn toàn bằng tiếng Anh.
+
+
+
+\subsection{Đánh giá và nhận xét}
+
+Qua khảo sát, có thể rút ra một số nhận xét quan trọng:
+
+\textbf{Khoảng trống trên thị trường:} Không có sản phẩm nào hiện tại cung cấp giải pháp hoàn chỉnh cho việc tự động xử lý email đặt lịch bằng tiếng Việt. Các sản phẩm lớn như Google, Microsoft đều tập trung vào tiếng Anh và các ngôn ngữ phổ biến. Người dùng Việt Nam vẫn phải xử lý thủ công phần lớn quy trình đặt lịch qua email.
+
+\textbf{Thiếu tích hợp email-to-calendar tự động:} Hầu hết các ứng dụng quản lý lịch hoạt động độc lập với email — người dùng vẫn phải tự đọc email rồi thao tác tạo sự kiện. Chưa có giải pháp nào tự động đọc email đến, phân tích nội dung, và thực hiện hành động tương ứng trên Calendar mà không cần sự can thiệp của người dùng.
+
+\textbf{Chi phí cao cho tính năng AI:} Các giải pháp có tích hợp AI (Microsoft Copilot, Motion) đều yêu cầu gói trả phí đáng kể, không phù hợp với người dùng cá nhân hoặc sinh viên.
+
+\textbf{Không thể tuỳ chỉnh:} Tất cả sản phẩm khảo sát đều là dịch vụ mã nguồn đóng, người dùng không thể điều chỉnh logic xử lý, thêm quy tắc riêng, hoặc tích hợp vào hệ thống khác theo nhu cầu.
+
+%%% ============================================================
+\section{Tổng quan chức năng}
+\label{section:2.2}
+
+Dựa trên kết quả khảo sát ở Mục~\ref{section:2.1}, hệ thống trợ lý thông minh hỗ trợ quản lý email và lịch làm việc cá nhân được thiết kế với các nhóm chức năng chính: xác thực người dùng, quản lý lịch qua giao diện chat, quản lý lịch tự động qua email, lọc email rác, và theo dõi hoạt động hệ thống. Phần này mô tả tổng quan các chức năng thông qua biểu đồ use case.
+
+\subsection{Biểu đồ use case tổng quát}
+\label{subsection:2.2.1}
+
+Hình~\ref{fig:uc_tongquat} thể hiện biểu đồ use case tổng quát của hệ thống.
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=0.9\textwidth]{Hinhve/uc_tongquat.png}
+    \caption{Biểu đồ use case tổng quát}
+    \label{fig:uc_tongquat}
+\end{figure}
+
+Hệ thống có ba tác nhân chính:
+
+\begin{itemize}
+    \item \textbf{Người dùng:} Là người sở hữu tài khoản, đăng nhập vào hệ thống qua Google OAuth để sử dụng giao diện chat, quản lý lịch, và theo dõi hoạt động. Đây là tác nhân chính của hệ thống.
+    \item \textbf{Người gửi email:} Là bất kỳ ai gửi email đến hộp thư Gmail của người dùng với nội dung liên quan đến lịch hẹn (đặt lịch, huỷ lịch, dời lịch, hỏi lịch trống). Tác nhân này không cần đăng nhập vào hệ thống.
+    \item \textbf{Google APIs:} Là hệ thống bên ngoài cung cấp dịch vụ Gmail API (đọc/gửi email) và Google Calendar API (quản lý sự kiện). Hệ thống tương tác với Google APIs thông qua giao thức OAuth 2.0.
+\end{itemize}
+
+Các use case mức cao bao gồm:
+
+\begin{itemize}
+    \item \textbf{UC1 -- Xác thực người dùng:} Cho phép người dùng đăng nhập/đăng xuất thông qua tài khoản Google.
+    \item \textbf{UC2 -- Quản lý lịch qua chat:} Người dùng tương tác với hệ thống qua giao diện trò chuyện bằng tiếng Việt để đặt lịch, huỷ lịch, xem lịch, hoặc hỏi đáp.
+    \item \textbf{UC3 -- Quản lý lịch qua email:} Hệ thống tự động xử lý email đến, phân loại intent, và thực hiện hành động tương ứng trên Google Calendar.
+    \item \textbf{UC4 -- Lọc email rác:} Hệ thống tự động nhận diện và bỏ qua email quảng cáo, newsletter trước khi đưa vào pipeline xử lý.
+    \item \textbf{UC5 -- Theo dõi hoạt động:} Người dùng xem thống kê và log hoạt động của hệ thống qua dashboard.
+\end{itemize}
+
+\subsection{Biểu đồ use case phân rã UC3: Quản lý lịch qua email}
+\label{subsection:2.2.2}
+
+Hình~\ref{fig:uc_email} thể hiện biểu đồ use case phân rã cho chức năng quản lý lịch qua email — đây là chức năng lõi và phức tạp nhất của hệ thống.
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=0.9\textwidth]{images/uc_email.png}
+    \caption{Biểu đồ use case phân rã: Quản lý lịch qua email}
+    \label{fig:uc_email}
+\end{figure}
+
+\begin{itemize}
+    \item \textbf{UC3.1 -- Phân loại intent email:} Sử dụng mô hình GPT-4o để phân tích nội dung email và phân loại thành 5 loại intent: đặt lịch (\textit{schedule}), huỷ lịch (\textit{cancel}), dời lịch (\textit{reschedule}), hỏi thông tin (\textit{inquiry}), và khác (\textit{other}). Đồng thời trích xuất các thông tin liên quan: thời gian, địa điểm, danh sách người tham gia. Đây là bước bắt buộc (<<include>>) trước khi thực hiện các use case tiếp theo.
+    \item \textbf{UC3.2 -- Đặt lịch hẹn tự động:} Khi intent là \textit{schedule}, hệ thống kiểm tra xung đột lịch thông qua Google Calendar Freebusy API. Nếu không xung đột, tạo sự kiện mới và gửi email xác nhận. Nếu xung đột, tìm khung giờ thay thế và gửi email thông báo.
+    \item \textbf{UC3.3 -- Huỷ lịch hẹn tự động:} Khi intent là \textit{cancel}, hệ thống tìm sự kiện tương ứng trên Calendar, xoá sự kiện, và gửi email xác nhận huỷ.
+    \item \textbf{UC3.4 -- Dời lịch hẹn tự động:} Khi intent là \textit{reschedule}, hệ thống tìm sự kiện cũ, kiểm tra xung đột cho thời gian mới, cập nhật sự kiện, và gửi email xác nhận.
+    \item \textbf{UC3.5 -- Trả lời email hỏi thông tin:} Khi intent là \textit{inquiry}, hệ thống sử dụng GPT-4o để sinh câu trả lời phù hợp và gửi email phản hồi tự động. Khi intent là \textit{other}, gửi email mẫu yêu cầu người gửi làm rõ nội dung.
+\end{itemize}
+
+\subsection{Biểu đồ use case phân rã UC2: Quản lý lịch qua chat}
+\label{subsection:2.2.3}
+
+Hình~\ref{fig:uc_chat} thể hiện biểu đồ use case phân rã cho chức năng quản lý lịch qua giao diện chat.
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=0.9\textwidth]{images/uc_chat.png}
+    \caption{Biểu đồ use case phân rã: Quản lý lịch qua chat}
+    \label{fig:uc_chat}
+\end{figure}
+
+\begin{itemize}
+    \item \textbf{UC2.1 -- Đặt lịch qua lệnh chat:} Người dùng nhập yêu cầu đặt lịch bằng ngôn ngữ tự nhiên tiếng Việt (ví dụ: ``Đặt lịch họp lúc 9h sáng thứ 3''). Hệ thống phân tích yêu cầu, gửi email xác nhận cho người tham gia, và tạo sự kiện trên Calendar sau khi được xác nhận.
+    \item \textbf{UC2.2 -- Huỷ/dời lịch qua lệnh chat:} Người dùng yêu cầu huỷ hoặc thay đổi sự kiện đã có. Hệ thống thực hiện thao tác tương ứng trên Calendar và gửi thông báo.
+    \item \textbf{UC2.3 -- Xem lịch sắp tới:} Người dùng hỏi về lịch trình (ví dụ: ``Lịch tuần này của tôi''). Hệ thống truy vấn Google Calendar và trả về danh sách sự kiện được định dạng đẹp.
+    \item \textbf{UC2.4 -- Hỏi đáp tự do:} Người dùng hỏi các câu hỏi liên quan đến quản lý thời gian. Hệ thống sử dụng GPT-4o để tạo câu trả lời phù hợp.
+\end{itemize}
+
+\subsection{Quy trình nghiệp vụ: Xử lý email đặt lịch}
+\label{subsection:2.2.4}
+
+Quy trình nghiệp vụ quan trọng nhất của hệ thống là xử lý tự động email đặt lịch, kết hợp nhiều use case trong một luồng hoạt động liên tục. Hình~\ref{fig:activity_email} minh hoạ quy trình này.
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=0.75\textwidth]{images/activity_email.png}
+    \caption{Biểu đồ hoạt động: Quy trình xử lý email đặt lịch}
+    \label{fig:activity_email}
+\end{figure}
+
+Quy trình hoạt động như sau: (1) Gmail Poller kiểm tra hộp thư mỗi 30 giây và lấy email mới; (2) Spam Filter kiểm tra email, nếu là spam thì bỏ qua; (3) Email Agent sử dụng GPT-4o phân loại intent và trích xuất thông tin; (4) Tuỳ theo intent, Calendar Agent thực hiện tạo/huỷ/dời sự kiện trên Google Calendar; (5) Nếu phát hiện xung đột lịch, Conflict Agent tìm khung giờ thay thế; (6) Notification Agent gửi email phản hồi cho người gửi; (7) Evaluation Agent đánh giá kết quả, nếu thất bại thì thử lại tối đa 2 lần; (8) Toàn bộ quá trình được ghi log vào cơ sở dữ liệu SQLite.
+
+%%% ============================================================
+\section{Đặc tả chức năng}
+\label{section:2.3}
+
+Phần này đặc tả chi tiết 6 use case quan trọng nhất của hệ thống. Mỗi đặc tả bao gồm luồng sự kiện chính, luồng phát sinh, tiền điều kiện, và hậu điều kiện.
+
+\subsection{Đặc tả UC3.2: Đặt lịch hẹn tự động qua email}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{|p{3.5cm}|p{10cm}|}
+\hline
+\textbf{Tên use case} & UC3.2: Đặt lịch hẹn tự động qua email \\
+\hline
+\textbf{Tác nhân} & Người gửi email, Google Calendar API, Gmail API \\
+\hline
+\textbf{Mô tả} & Hệ thống tự động tạo sự kiện trên Google Calendar khi nhận được email có intent ``schedule'' và gửi email xác nhận cho người gửi. \\
+\hline
+\textbf{Tiền điều kiện} & Email đã được phân loại intent là ``schedule'' bởi Email Agent. Thông tin thời gian, tiêu đề cuộc hẹn đã được trích xuất thành công. \\
+\hline
+\textbf{Hậu điều kiện} & Sự kiện mới được tạo trên Google Calendar. Email xác nhận đã được gửi cho người gửi. Log hoạt động được ghi vào cơ sở dữ liệu. \\
+\hline
+\textbf{Luồng sự kiện chính} &
+\begin{enumerate}
+    \item Calendar Agent nhận kết quả phân loại từ Email Agent.
+    \item Calendar Agent gọi Google Calendar Freebusy API kiểm tra xung đột tại khung giờ được yêu cầu.
+    \item Không có xung đột — Calendar Agent gọi Calendar API tạo sự kiện mới với tiêu đề, thời gian, địa điểm, và danh sách người tham gia.
+    \item Notification Agent tạo email xác nhận bằng tiếng Việt, bao gồm thông tin sự kiện và link Google Calendar.
+    \item Notification Agent gửi email qua Gmail API.
+    \item Hệ thống ghi log kết quả thành công.
+\end{enumerate} \\
+\hline
+\textbf{Luồng phát sinh} &
+\begin{itemize}
+    \item[2a.] Phát hiện xung đột lịch: Conflict Agent gọi Freebusy API tìm 3 khung giờ trống gần nhất trong giờ làm việc (8h--18h). Notification Agent gửi email thông báo xung đột kèm danh sách giờ thay thế.
+    \item[3a.] Google Calendar API trả lỗi: Hệ thống ghi log lỗi, Evaluation Agent đánh giá và thử lại (tối đa 2 lần).
+    \item[5a.] Gmail API trả lỗi khi gửi email: Ghi log lỗi gửi notification, sự kiện vẫn được giữ trên Calendar.
+\end{itemize} \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Đặc tả UC3.3: Huỷ lịch hẹn tự động qua email}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{|p{3.5cm}|p{10cm}|}
+\hline
+\textbf{Tên use case} & UC3.3: Huỷ lịch hẹn tự động qua email \\
+\hline
+\textbf{Tác nhân} & Người gửi email, Google Calendar API, Gmail API \\
+\hline
+\textbf{Mô tả} & Hệ thống tự động huỷ sự kiện trên Google Calendar khi nhận email có intent ``cancel''. \\
+\hline
+\textbf{Tiền điều kiện} & Email đã được phân loại intent là ``cancel''. Thông tin thời gian của sự kiện cần huỷ đã được trích xuất. \\
+\hline
+\textbf{Hậu điều kiện} & Sự kiện tương ứng bị xoá khỏi Google Calendar. Email xác nhận huỷ đã được gửi. \\
+\hline
+\textbf{Luồng sự kiện chính} &
+\begin{enumerate}
+    \item Calendar Agent tìm sự kiện trên Calendar dựa trên thời gian trích xuất.
+    \item Tìm thấy sự kiện — Calendar Agent gọi API xoá sự kiện.
+    \item Notification Agent gửi email xác nhận huỷ lịch cho người gửi.
+    \item Hệ thống ghi log kết quả.
+\end{enumerate} \\
+\hline
+\textbf{Luồng phát sinh} &
+\begin{itemize}
+    \item[1a.] Không tìm thấy sự kiện phù hợp: Notification Agent gửi email thông báo không tìm thấy sự kiện cần huỷ, yêu cầu người gửi kiểm tra lại thông tin.
+    \item[1b.] Thông tin thời gian không rõ ràng: Hệ thống ghi log lỗi và gửi email yêu cầu làm rõ.
+\end{itemize} \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Đặc tả UC3.4: Dời lịch hẹn tự động qua email}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{|p{3.5cm}|p{10cm}|}
+\hline
+\textbf{Tên use case} & UC3.4: Dời lịch hẹn tự động qua email \\
+\hline
+\textbf{Tác nhân} & Người gửi email, Google Calendar API, Gmail API \\
+\hline
+\textbf{Mô tả} & Hệ thống tự động dời sự kiện sang thời gian mới khi nhận email có intent ``reschedule''. \\
+\hline
+\textbf{Tiền điều kiện} & Email đã được phân loại intent là ``reschedule''. Thời gian cũ và thời gian mới đã được trích xuất. \\
+\hline
+\textbf{Hậu điều kiện} & Sự kiện đã được cập nhật sang thời gian mới. Email xác nhận thay đổi đã được gửi. \\
+\hline
+\textbf{Luồng sự kiện chính} &
+\begin{enumerate}
+    \item Calendar Agent tìm sự kiện cũ dựa trên thời gian ban đầu.
+    \item Kiểm tra xung đột tại thời gian mới bằng Freebusy API.
+    \item Không xung đột — cập nhật sự kiện với thời gian mới.
+    \item Notification Agent gửi email xác nhận thay đổi lịch.
+    \item Ghi log kết quả.
+\end{enumerate} \\
+\hline
+\textbf{Luồng phát sinh} &
+\begin{itemize}
+    \item[1a.] Không tìm thấy sự kiện cũ: Gửi email thông báo không tìm thấy.
+    \item[2a.] Xung đột tại thời gian mới: Conflict Agent tìm giờ thay thế, gửi email đề xuất.
+    \item[*] Thiếu thời gian cũ hoặc mới: Gửi email yêu cầu cung cấp đầy đủ thông tin.
+\end{itemize} \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Đặc tả UC2.1: Đặt lịch qua lệnh chat}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{|p{3.5cm}|p{10cm}|}
+\hline
+\textbf{Tên use case} & UC2.1: Đặt lịch qua lệnh chat \\
+\hline
+\textbf{Tác nhân} & Người dùng, Google Calendar API, Gmail API \\
+\hline
+\textbf{Mô tả} & Người dùng nhập lệnh đặt lịch bằng tiếng Việt qua giao diện chat, hệ thống tạo sự kiện và gửi email xác nhận cho người tham gia. \\
+\hline
+\textbf{Tiền điều kiện} & Người dùng đã đăng nhập thành công qua Google OAuth. \\
+\hline
+\textbf{Hậu điều kiện} & Email mời họp được gửi cho người tham gia. Sự kiện được tạo trên Calendar sau khi người tham gia xác nhận. \\
+\hline
+\textbf{Luồng sự kiện chính} &
+\begin{enumerate}
+    \item Người dùng nhập tin nhắn (ví dụ: ``Đặt lịch họp với Minh lúc 3h chiều thứ 5'').
+    \item Chat Agent (GPT-4o) phân tích tin nhắn, nhận diện action ``schedule'', trích xuất thời gian, người tham gia.
+    \item Hệ thống gửi email mời họp kèm link xác nhận/từ chối cho người được mời.
+    \item Chat Agent trả lời người dùng: ``Đã gửi email mời họp, đang chờ xác nhận''.
+    \item Người được mời click link xác nhận trong email.
+    \item Hệ thống tạo sự kiện trên Google Calendar.
+\end{enumerate} \\
+\hline
+\textbf{Luồng phát sinh} &
+\begin{itemize}
+    \item[2a.] Không nhận diện được action: Chat Agent trả lời bằng ngôn ngữ tự nhiên, hỏi lại thông tin cần thiết.
+    \item[5a.] Người được mời từ chối: Hệ thống thông báo cho người dùng qua chat, không tạo sự kiện.
+\end{itemize} \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Đặc tả UC1: Xác thực người dùng}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{|p{3.5cm}|p{10cm}|}
+\hline
+\textbf{Tên use case} & UC1: Xác thực người dùng \\
+\hline
+\textbf{Tác nhân} & Người dùng, Google OAuth 2.0 \\
+\hline
+\textbf{Mô tả} & Người dùng đăng nhập vào hệ thống bằng tài khoản Google, nhận JWT token để sử dụng các chức năng yêu cầu xác thực. \\
+\hline
+\textbf{Tiền điều kiện} & Người dùng có tài khoản Google hợp lệ. Hệ thống đã được cấu hình Google OAuth client. \\
+\hline
+\textbf{Hậu điều kiện} & Người dùng được xác thực, thông tin (tên, email, ảnh đại diện) được lưu trong cơ sở dữ liệu. JWT token được tạo và lưu dưới dạng cookie. \\
+\hline
+\textbf{Luồng sự kiện chính} &
+\begin{enumerate}
+    \item Người dùng truy cập giao diện chat, bấm ``Đăng nhập bằng Google''.
+    \item Hệ thống chuyển hướng đến trang đăng nhập Google OAuth.
+    \item Người dùng chọn tài khoản Google và cấp quyền truy cập (Calendar, Gmail).
+    \item Google trả về authorization code cho hệ thống.
+    \item Hệ thống đổi code lấy access token, giải mã ID token để lấy thông tin người dùng.
+    \item Hệ thống lưu/cập nhật thông tin vào bảng \texttt{users} trong SQLite.
+    \item Hệ thống tạo JWT token, set cookie, và chuyển hướng về giao diện chat.
+    \item Giao diện hiển thị tên và ảnh đại diện người dùng.
+\end{enumerate} \\
+\hline
+\textbf{Luồng phát sinh} &
+\begin{itemize}
+    \item[3a.] Người dùng từ chối cấp quyền: Quay về trang đăng nhập, hiển thị thông báo lỗi.
+    \item[5a.] Google trả lỗi (token không hợp lệ): Hiển thị thông báo đăng nhập thất bại.
+    \item[*] JWT hết hạn: Khi gọi API trả về 401, frontend tự chuyển hướng về trang đăng nhập.
+\end{itemize} \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Đặc tả UC5: Theo dõi hoạt động hệ thống}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{|p{3.5cm}|p{10cm}|}
+\hline
+\textbf{Tên use case} & UC5: Theo dõi hoạt động hệ thống \\
+\hline
+\textbf{Tác nhân} & Người dùng \\
+\hline
+\textbf{Mô tả} & Người dùng xem thống kê và chi tiết log hoạt động của hệ thống thông qua dashboard. \\
+\hline
+\textbf{Tiền điều kiện} & Người dùng đã đăng nhập thành công. \\
+\hline
+\textbf{Hậu điều kiện} & Dữ liệu thống kê và log được hiển thị trên giao diện. \\
+\hline
+\textbf{Luồng sự kiện chính} &
+\begin{enumerate}
+    \item Người dùng truy cập trang dashboard.
+    \item Hệ thống truy vấn bảng \texttt{system\_logs} trong SQLite.
+    \item Dashboard hiển thị: tổng số email đã xử lý hôm nay, tỉ lệ xử lý thành công, phân bổ theo loại intent, thời gian xử lý trung bình.
+    \item Bảng log chi tiết hiển thị danh sách hoạt động gần nhất với thông tin: thời gian, agent, trạng thái, nội dung.
+    \item Người dùng có thể lọc log theo agent, trạng thái, từ khoá, hoặc khoảng thời gian.
+\end{enumerate} \\
+\hline
+\textbf{Luồng phát sinh} &
+\begin{itemize}
+    \item[2a.] Cơ sở dữ liệu trống (hệ thống mới): Hiển thị giá trị mặc định (tổng = 0, tỉ lệ = 0\%, danh sách rỗng).
+\end{itemize} \\
+\hline
+\end{tabular}
+\end{table}
+
+%%% ============================================================
+\section{Yêu cầu phi chức năng}
+\label{section:2.4}
+
+Ngoài các yêu cầu chức năng đã đặc tả, hệ thống cần đáp ứng các yêu cầu phi chức năng sau:
+
+\textbf{Hiệu năng:}
+\begin{itemize}
+    \item Thời gian xử lý một email (từ khi nhận đến khi gửi phản hồi) không quá 10 giây trong điều kiện bình thường. Phần lớn thời gian phụ thuộc vào tốc độ phản hồi của OpenAI API và Google APIs.
+    \item Gmail Poller kiểm tra email mới mỗi 30 giây, đảm bảo độ trễ phản hồi tối đa khoảng 40 giây.
+    \item API chat phản hồi trong vòng 5 giây cho các yêu cầu đơn giản.
+\end{itemize}
+
+\textbf{Độ tin cậy:}
+\begin{itemize}
+    \item Cơ chế retry thông minh: Evaluation Agent tự động đánh giá kết quả pipeline và thử lại tối đa 2 lần khi xử lý thất bại, sử dụng \texttt{asyncio.sleep()} không chặn event loop.
+    \item Xử lý lỗi graceful: Mọi ngoại lệ được bắt và xử lý, hệ thống không bị crash khi một email gây lỗi — các email tiếp theo vẫn được xử lý bình thường.
+    \item Ghi log đầy đủ: Mọi hành động của agent được ghi vào SQLite, phục vụ debug và kiểm toán.
+\end{itemize}
+
+\textbf{Tính dễ dùng:}
+\begin{itemize}
+    \item Giao diện chat hỗ trợ tiếng Việt hoàn toàn, bao gồm các email phản hồi tự động.
+    \item Đăng nhập bằng tài khoản Google quen thuộc, không yêu cầu tạo tài khoản riêng.
+    \item Dashboard hiển thị thông tin trực quan, hỗ trợ lọc và tìm kiếm.
+\end{itemize}
+
+\textbf{Tính dễ bảo trì:}
+\begin{itemize}
+    \item Kiến trúc agent pipeline module hoá: mỗi agent (email, calendar, conflict, notification, evaluation) là một module độc lập, có thể thay thế hoặc mở rộng mà không ảnh hưởng các agent khác.
+    \item Cấu hình tập trung thông qua Pydantic Settings, đọc từ file \texttt{.env}, không hardcode giá trị.
+    \item Xác thực Google OAuth tập trung trong \texttt{core/auth.py}, tránh duplicate code.
+    \item Bộ test tự động 198 test cases (unit + integration + e2e) với CI/CD qua GitHub Actions.
+\end{itemize}
+
+\textbf{Yêu cầu kỹ thuật:}
+\begin{itemize}
+    \item Backend: Python 3.10+, FastAPI (async web framework).
+    \item AI/LLM: OpenAI GPT-4o thông qua OpenAI SDK.
+    \item Cơ sở dữ liệu: SQLite (file-based, phù hợp cho ứng dụng cá nhân).
+    \item Xác thực: Google OAuth 2.0 + JWT (JSON Web Token).
+    \item APIs bên ngoài: Google Calendar API v3, Google Gmail API v1.
+    \item Frontend: HTML/CSS/JavaScript đơn giản, phục vụ bởi FastAPI.
+\end{itemize}
+
+\vspace{0.5cm}
+Chương này đã trình bày kết quả khảo sát hiện trạng, xác định khoảng trống trên thị trường mà hệ thống đề xuất hướng tới giải quyết. Biểu đồ use case tổng quát và phân rã đã mô tả tổng quan chức năng hệ thống với 5 use case mức cao và các use case con. Đặc tả chi tiết 6 use case quan trọng nhất cung cấp cái nhìn đầy đủ về luồng hoạt động và các tình huống ngoại lệ. Các yêu cầu phi chức năng về hiệu năng, độ tin cậy, và tính bảo trì đã được xác định rõ ràng, làm cơ sở cho thiết kế và triển khai ở các chương tiếp theo.
+
+\end{document}

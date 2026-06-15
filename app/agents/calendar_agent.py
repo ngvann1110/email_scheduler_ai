@@ -64,6 +64,154 @@ def _find_events_by_time(service, start_dt: datetime, end_dt: datetime) -> list:
     return result.get("items", [])
 
 
+# ── Check-only functions (HITL pipeline: inspect without side effects) ─────────
+
+def check_calendar_availability(email_result: dict) -> dict:
+    """
+    Inspect whether the requested meeting slot is free without creating any event.
+
+    Returns dict with status "free" | "conflict" | "error" and calendar metadata
+    that the orchestrator stores in pending_actions.calendar_result.
+    """
+    time_str  = email_result.get("time")
+    summary   = email_result.get("summary", "Cuộc họp")
+    location  = email_result.get("location")
+    attendees = email_result.get("attendees", [])
+
+    if not time_str:
+        return {"status": "error", "message": "Email không có thông tin thời gian cụ thể"}
+
+    try:
+        start_dt = datetime.fromisoformat(time_str)
+    except ValueError:
+        return {"status": "error", "message": f"Định dạng thời gian không hợp lệ: {time_str}"}
+
+    end_dt = start_dt + timedelta(minutes=DEFAULT_DURATION)
+    logger.info("[CalendarAgent] Kiểm tra khả dụng | start=%s | end=%s", start_dt, end_dt)
+
+    try:
+        service = _get_service()
+        busy = _check_conflict(service, start_dt, end_dt)
+
+        base = {
+            "requested_time": time_str,
+            "start":          start_dt.isoformat(),
+            "end":            end_dt.isoformat(),
+            "summary":        summary,
+            "location":       location,
+            "attendees":      attendees,
+        }
+
+        if busy:
+            logger.info("[CalendarAgent] Conflict tại %s | busy=%s", start_dt, busy)
+            return {
+                **base,
+                "status":     "conflict",
+                "message":    f"Khung giờ {start_dt.strftime('%H:%M %d/%m/%Y')} đã bận",
+                "busy_slots": busy,
+            }
+
+        logger.info("[CalendarAgent] ✓ Khung giờ %s trống", start_dt)
+        return {
+            **base,
+            "status":     "free",
+            "message":    f"Khung giờ {start_dt.strftime('%H:%M %d/%m/%Y')} trống",
+            "busy_slots": [],
+        }
+
+    except HttpError as e:
+        return {"status": "error", "message": f"Google Calendar lỗi: {e}"}
+    except Exception as e:
+        logger.exception("[CalendarAgent] Lỗi kiểm tra khả dụng")
+        return {"status": "error", "message": str(e)}
+
+
+def check_reschedule_availability(email_result: dict) -> dict:
+    """
+    Inspect whether a reschedule is feasible without modifying any event.
+
+    Finds the old event (±1 h around old_time), then checks whether the new
+    slot is free.  Returns dict with status "free" | "conflict" | "not_found" |
+    "error" and the old event metadata so the orchestrator can store it in
+    pending_actions.calendar_result.
+    """
+    new_time_str = email_result.get("time")
+    old_time_str = email_result.get("old_time")
+
+    if not new_time_str:
+        return {"status": "error", "message": "Email không có thông tin giờ mới"}
+    if not old_time_str:
+        return {"status": "error", "message": "Email không có thông tin giờ cũ cần dời"}
+
+    try:
+        new_dt = datetime.fromisoformat(new_time_str)
+        old_dt = datetime.fromisoformat(old_time_str)
+    except ValueError as e:
+        return {"status": "error", "message": f"Định dạng thời gian không hợp lệ: {e}"}
+
+    new_end_dt = new_dt + timedelta(minutes=DEFAULT_DURATION)
+    logger.info("[CalendarAgent] Kiểm tra dời lịch | old=%s → new=%s", old_dt, new_dt)
+
+    try:
+        service = _get_service()
+
+        search_start = old_dt - timedelta(hours=1)
+        search_end   = old_dt + timedelta(hours=1)
+        events = _find_events_by_time(service, search_start, search_end)
+
+        if not events:
+            return {
+                "status":   "not_found",
+                "message":  f"Không tìm thấy lịch họp nào vào lúc {old_dt.strftime('%H:%M %d/%m/%Y')}",
+                "old_time": old_time_str,
+                "new_time": new_time_str,
+            }
+
+        target_event  = events[0]
+        event_id      = target_event["id"]
+        event_title   = target_event.get("summary", "Cuộc họp")
+        attendees = [
+            a.get("email", "")
+            for a in target_event.get("attendees", [])
+            if a.get("email") and a.get("email") != settings.ORGANIZER_EMAIL
+        ]
+
+        busy = _check_conflict(service, new_dt, new_end_dt)
+
+        base = {
+            "old_time":        old_time_str,
+            "new_time":        new_time_str,
+            "start":           new_dt.isoformat(),
+            "end":             new_end_dt.isoformat(),
+            "old_event_id":    event_id,
+            "old_event_title": event_title,
+            "attendees":       attendees,
+        }
+
+        if busy:
+            return {
+                **base,
+                "status":     "conflict",
+                "message":    f"Khung giờ mới {new_dt.strftime('%H:%M %d/%m/%Y')} đã bận",
+                "busy_slots": busy,
+            }
+
+        logger.info("[CalendarAgent] ✓ Giờ mới %s trống, có thể dời", new_dt)
+        return {
+            **base,
+            "status":     "free",
+            "message":    f"Khung giờ mới {new_dt.strftime('%H:%M %d/%m/%Y')} trống",
+            "busy_slots": [],
+        }
+
+    except HttpError as e:
+        logger.error("[CalendarAgent] Google API error: %s", e)
+        return {"status": "error", "message": f"Google Calendar lỗi: {e}"}
+    except Exception as e:
+        logger.exception("[CalendarAgent] Lỗi kiểm tra dời lịch")
+        return {"status": "error", "message": str(e)}
+
+
 # ── Public API
 def process_schedule(email_result: dict) -> dict:
     """Tạo lịch mới trên Google Calendar."""

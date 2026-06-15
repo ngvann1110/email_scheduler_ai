@@ -11,6 +11,7 @@ from app.db.sqlite import init_db
 from app.core.gmail_poller import poll_gmail
 from app.api.v1.auth import router as auth_router
 from app.api.v1.chat import router as chat_router
+from app.api.v1.dashboard import router as dashboard_router
 from app.api.v1.webhook import router as webhook_router
 
 logger = logging.getLogger(__name__)
@@ -46,6 +47,7 @@ init_db()
 app.include_router(auth_router)
 app.include_router(webhook_router)
 app.include_router(chat_router)
+app.include_router(dashboard_router)
 
 
 @app.on_event("startup")

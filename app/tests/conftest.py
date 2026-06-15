@@ -274,8 +274,13 @@ def mock_openai_client():
         mock_client.chat.completions.create.return_value = MockChatCompletion(
             json.dumps({
                 "intent": "schedule",
+                "category": "Meeting",
+                "priority": "High",
                 "summary": "Test meeting request",
+                "action_required": True,
+                "important_note": "Meeting: 9am Monday in Room A",
                 "time": "2026-06-10T09:00:00",
+                "old_time": None,
                 "location": "Room A",
                 "attendees": ["attendee@example.com"],
                 "confidence": 0.95,
@@ -325,9 +330,10 @@ def test_client():
     from fastapi import FastAPI
     from fastapi.middleware.cors import CORSMiddleware
     from starlette.middleware.sessions import SessionMiddleware
-    from app.api.v1.chat import router as chat_router
-    from app.api.v1.webhook import router as webhook_router
     from app.api.v1.auth import router as auth_router
+    from app.api.v1.chat import router as chat_router
+    from app.api.v1.dashboard import router as dashboard_router
+    from app.api.v1.webhook import router as webhook_router
 
     app = FastAPI(title="Email Scheduler AI - Test")
     app.add_middleware(
@@ -366,6 +372,7 @@ def test_client():
     app.include_router(auth_router)
     app.include_router(webhook_router)
     app.include_router(chat_router)
+    app.include_router(dashboard_router)
 
     @app.get("/ui")
     def ui():

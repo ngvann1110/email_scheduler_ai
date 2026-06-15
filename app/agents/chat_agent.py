@@ -204,11 +204,20 @@ def _fetch_upcoming_events(range_days: int = 7) -> list:
         for e in result.get("items", []):
             start = e.get("start", {})
             dt_str = start.get("dateTime") or start.get("date", "")
+            end = e.get("end", {})
+            end_str = end.get("dateTime") or end.get("date", "")
+            attendees = [
+                a.get("email", "")
+                for a in e.get("attendees", [])
+                if a.get("email")
+            ]
             events.append({
-                "summary":  e.get("summary", "Sự kiện"),
-                "start":    dt_str,
-                "location": e.get("location", ""),
-                "link":     e.get("htmlLink", ""),
+                "summary":   e.get("summary", "Sự kiện"),
+                "start":     dt_str,
+                "end":       end_str,
+                "location":  e.get("location", ""),
+                "link":      e.get("htmlLink", ""),
+                "attendees": attendees,
             })
         return events
     except Exception as ex:

@@ -60,6 +60,62 @@ class TestChatEndpoint:
         assert data["action"]["type"] == "schedule"
 
 
+class TestSendEmailEndpoint:
+    """Tests for POST /chat/send-email — verifies shared Gmail service is used."""
+
+    def test_send_email_returns_ok(self, auth_client, mock_gmail_service):
+        """Should return {status: ok} when Gmail API call succeeds."""
+        with patch("app.api.v1.chat.get_gmail_service", return_value=mock_gmail_service):
+            response = auth_client.post(
+                "/chat/send-email",
+                json={"to": "recipient@example.com", "subject": "Hi", "body": "Hello"},
+            )
+        assert response.status_code == 200
+        assert response.json() == {"status": "ok"}
+
+    def test_send_email_calls_shared_auth_not_private_function(self, auth_client, mock_gmail_service):
+        """_send_email must obtain Gmail service via app.api.v1.chat.get_gmail_service,
+        not through a private duplicated OAuth function in chat.py."""
+        with patch("app.api.v1.chat.get_gmail_service", return_value=mock_gmail_service) as mock_get:
+            auth_client.post(
+                "/chat/send-email",
+                json={"to": "recipient@example.com", "subject": "Hi", "body": "Hello"},
+            )
+        mock_get.assert_called_once()
+
+    def test_send_email_calls_gmail_send_api(self, auth_client, mock_gmail_service):
+        """Gmail users().messages().send() must be called with the correct userId."""
+        with patch("app.api.v1.chat.get_gmail_service", return_value=mock_gmail_service):
+            auth_client.post(
+                "/chat/send-email",
+                json={"to": "recipient@example.com", "subject": "Test", "body": "Body text"},
+            )
+        mock_gmail_service.users().messages().send.assert_called_once()
+        call_kwargs = mock_gmail_service.users().messages().send.call_args
+        assert call_kwargs.kwargs.get("userId") == "me"
+
+    def test_send_email_logs_to_sent_emails_table(self, auth_client, mock_gmail_service):
+        """insert_sent_email must be called so the sent email appears in the dashboard."""
+        with patch("app.api.v1.chat.get_gmail_service", return_value=mock_gmail_service):
+            with patch("app.api.v1.chat.insert_sent_email") as mock_insert:
+                auth_client.post(
+                    "/chat/send-email",
+                    json={"to": "log@example.com", "subject": "Log test", "body": "body"},
+                )
+        mock_insert.assert_called_once()
+        args = mock_insert.call_args.args
+        assert args[0] == "log@example.com"
+        assert args[1] == "Log test"
+
+    def test_send_email_missing_field_returns_422(self, auth_client):
+        """Pydantic must reject a request missing a required field."""
+        response = auth_client.post(
+            "/chat/send-email",
+            json={"to": "recipient@example.com"},  # missing subject and body
+        )
+        assert response.status_code == 422
+
+
 class TestConfirmInvite:
     """Tests for GET /chat/confirm/{token}."""
 

@@ -2,8 +2,9 @@
 Unit tests for app/orchestrator/orchestrator.py
 
 Tests:
-- run_pipeline() — all intent branches (schedule, send_email, reply_email, reschedule, inquiry, other)
+- run_pipeline() — all intent branches (schedule, reschedule, inquiry, other)
 - Pipeline integration with mocked agents
+- Note: send_notification and send_reply are no longer triggered by the orchestrator.
 """
 
 from unittest.mock import MagicMock, patch
@@ -18,41 +19,47 @@ class TestRunPipeline:
 
     @patch("app.orchestrator.orchestrator.process_email")
     @patch("app.orchestrator.orchestrator.process_schedule")
-    @patch("app.orchestrator.orchestrator.send_notification")
     @patch("app.orchestrator.orchestrator.log_event")
     @pytest.mark.asyncio
-    async def test_schedule_flow(self, mock_log, mock_notification, mock_schedule, mock_email):
+    async def test_schedule_flow(self, mock_log, mock_schedule, mock_email):
         """Should execute schedule flow when intent is 'schedule'."""
-        mock_email.return_value = {"intent": "schedule",
-                                   "time": "2026-06-10T09:00:00", "summary": "Test"}
+        mock_email.return_value = {
+            "intent": "schedule",
+            "time": "2026-06-10T09:00:00",
+            "summary": "Test",
+        }
         mock_schedule.return_value = {
-            "status": "created", "event_id": "evt_001"}
-        mock_notification.return_value = {
-            "status": "sent", "to": "user@example.com"}
+            "status": "created",
+            "event_id": "evt_001",
+        }
 
         result = await run_pipeline(MagicMock())
 
         assert result["type"] == "schedule_flow"
         assert result["data"]["email"]["intent"] == "schedule"
         assert result["data"]["calendar"]["status"] == "created"
-        assert result["data"]["notification"]["status"] == "sent"
         mock_schedule.assert_called_once()
-        mock_notification.assert_called_once()
 
     @patch("app.orchestrator.orchestrator.process_email")
     @patch("app.orchestrator.orchestrator.process_schedule")
     @patch("app.orchestrator.orchestrator.find_alternatives")
-    @patch("app.orchestrator.orchestrator.send_notification")
     @patch("app.orchestrator.orchestrator.log_event")
     @pytest.mark.asyncio
-    async def test_schedule_flow_with_conflict(self, mock_log, mock_notification, mock_conflict, mock_schedule, mock_email):
+    async def test_schedule_flow_with_conflict(
+        self, mock_log, mock_conflict, mock_schedule, mock_email
+    ):
         """Should include conflict resolution when schedule has conflict."""
         mock_email.return_value = {
-            "intent": "schedule", "time": "2026-06-10T09:00:00"}
+            "intent": "schedule",
+            "time": "2026-06-10T09:00:00",
+        }
         mock_schedule.return_value = {"status": "conflict", "busy_slots": []}
-        mock_conflict.return_value = {"status": "found", "suggestions": [
-            {"start": "...", "end": "...", "label": "Alternative"}]}
-        mock_notification.return_value = {"status": "sent"}
+        mock_conflict.return_value = {
+            "status": "found",
+            "suggestions": [
+                {"start": "...", "end": "...", "label": "Alternative"}
+            ],
+        }
 
         result = await run_pipeline(MagicMock())
 
@@ -63,16 +70,21 @@ class TestRunPipeline:
 
     @patch("app.orchestrator.orchestrator.process_email")
     @patch("app.orchestrator.orchestrator.process_reschedule")
-    @patch("app.orchestrator.orchestrator.send_notification")
     @patch("app.orchestrator.orchestrator.log_event")
     @pytest.mark.asyncio
-    async def test_reschedule_flow(self, mock_log, mock_notification, mock_reschedule, mock_email):
+    async def test_reschedule_flow(
+        self, mock_log, mock_reschedule, mock_email
+    ):
         """Should execute reschedule flow when intent is 'reschedule'."""
         mock_email.return_value = {
-            "intent": "reschedule", "time": "2026-06-11T10:00:00", "old_time": "2026-06-10T09:00:00"}
+            "intent": "reschedule",
+            "time": "2026-06-11T10:00:00",
+            "old_time": "2026-06-10T09:00:00",
+        }
         mock_reschedule.return_value = {
-            "status": "rescheduled", "event_id": "evt_001"}
-        mock_notification.return_value = {"status": "sent"}
+            "status": "rescheduled",
+            "event_id": "evt_001",
+        }
 
         result = await run_pipeline(MagicMock())
 
@@ -81,16 +93,11 @@ class TestRunPipeline:
         mock_reschedule.assert_called_once()
 
     @patch("app.orchestrator.orchestrator.process_email")
-    @patch("app.orchestrator.orchestrator.chat")
-    @patch("app.orchestrator.orchestrator.send_reply")
     @patch("app.orchestrator.orchestrator.log_event")
     @pytest.mark.asyncio
-    async def test_inquiry_flow(self, mock_log, mock_send_reply, mock_chat, mock_email):
-        """Should execute inquiry flow when intent is 'inquiry' — calls chat and sends reply."""
+    async def test_inquiry_flow(self, mock_log, mock_email):
+        """Should execute inquiry flow when intent is 'inquiry' — logged, no auto-reply."""
         mock_email.return_value = {"intent": "inquiry"}
-        mock_chat.return_value = {
-            "reply": "Đây là câu trả lời từ AI", "action": None}
-        mock_send_reply.return_value = {"status": "sent"}
 
         email_obj = MagicMock()
         email_obj.body = "Khi nào có lịch trống?"
@@ -98,19 +105,17 @@ class TestRunPipeline:
         result = await run_pipeline(email_obj)
 
         assert result["type"] == "inquiry_flow"
-        assert result["data"]["reply"] == "Đây là câu trả lời từ AI"
-        assert result["data"]["notification"]["status"] == "sent"
-        mock_chat.assert_called_once()
-        mock_send_reply.assert_called_once()
+        assert result["data"]["email"]["intent"] == "inquiry"
 
     @patch("app.orchestrator.orchestrator.process_email")
     @patch("app.orchestrator.orchestrator.classify_intelligence")
     @patch("app.orchestrator.orchestrator.insert_email_analysis")
-    @patch("app.orchestrator.orchestrator.send_reply")
     @patch("app.orchestrator.orchestrator.log_event")
     @pytest.mark.asyncio
-    async def test_other_flow(self, mock_log, mock_send_reply, mock_insert, mock_intel, mock_email):
-        """Should execute other_flow when intent is 'other' — calls intelligence agent and sends fallback email."""
+    async def test_other_flow(
+        self, mock_log, mock_insert, mock_intel, mock_email
+    ):
+        """Should execute other_flow when intent is 'other' — calls intelligence agent, no auto-reply."""
         mock_email.return_value = {"intent": "other"}
         mock_intel.return_value = {
             "category": "report",
@@ -118,7 +123,6 @@ class TestRunPipeline:
             "summary": "- Doanh thu Q2 tăng 12%",
             "extracted_data": {"project": "Test"},
         }
-        mock_send_reply.return_value = {"status": "sent"}
 
         email_obj = MagicMock()
         email_obj.sender = "user@example.com"
@@ -126,23 +130,21 @@ class TestRunPipeline:
         result = await run_pipeline(email_obj)
 
         assert result["type"] == "other_flow"
-        assert result["data"]["notification"]["status"] == "sent"
         assert result["data"]["intelligence"]["category"] == "report"
         assert result["data"]["intelligence"]["importance_score"] == 78
         mock_intel.assert_called_once_with(email_obj)
         mock_insert.assert_called_once()
-        mock_send_reply.assert_called_once()
 
     @patch("app.orchestrator.orchestrator.process_email")
     @patch("app.orchestrator.orchestrator.classify_intelligence")
-    @patch("app.orchestrator.orchestrator.send_reply")
     @patch("app.orchestrator.orchestrator.log_event")
     @pytest.mark.asyncio
-    async def test_other_flow_intelligence_error_handled(self, mock_log, mock_send_reply, mock_intel, mock_email):
-        """When intelligence agent fails, should still send fallback email."""
+    async def test_other_flow_intelligence_error_handled(
+        self, mock_log, mock_intel, mock_email
+    ):
+        """When intelligence agent fails, should still complete gracefully with error info."""
         mock_email.return_value = {"intent": "other"}
         mock_intel.side_effect = Exception("AI failure")
-        mock_send_reply.return_value = {"status": "sent"}
 
         email_obj = MagicMock()
         email_obj.sender = "user@example.com"
@@ -150,23 +152,29 @@ class TestRunPipeline:
 
         # Should still complete with error handling
         assert result["type"] == "other_flow"
-        assert result["data"]["notification"]["status"] == "sent"
-        mock_send_reply.assert_called_once()
+        assert result["data"]["email"]["intent"] == "other"
+        assert result["data"]["error"] == "AI failure"
 
     @patch("app.orchestrator.orchestrator.process_email")
     @patch("app.orchestrator.orchestrator.process_schedule")
-    @patch("app.orchestrator.orchestrator.send_notification")
     @patch("app.orchestrator.orchestrator.log_event")
     @pytest.mark.asyncio
-    async def test_schedule_flow_no_conflict(self, mock_log, mock_notification, mock_schedule, mock_email):
+    async def test_schedule_flow_no_conflict(
+        self, mock_log, mock_schedule, mock_email
+    ):
         """When schedule has no conflict, conflict_agent should not be called."""
         mock_email.return_value = {
-            "intent": "schedule", "time": "2026-06-10T09:00:00"}
+            "intent": "schedule",
+            "time": "2026-06-10T09:00:00",
+        }
         mock_schedule.return_value = {
-            "status": "created", "event_id": "evt_001"}
-        mock_notification.return_value = {"status": "sent"}
+            "status": "created",
+            "event_id": "evt_001",
+        }
 
-        with patch("app.orchestrator.orchestrator.find_alternatives") as mock_conflict:
+        with patch(
+            "app.orchestrator.orchestrator.find_alternatives"
+        ) as mock_conflict:
             result = await run_pipeline(MagicMock())
 
         assert result["type"] == "schedule_flow"

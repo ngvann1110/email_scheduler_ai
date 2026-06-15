@@ -2,238 +2,198 @@ import json
 import logging
 
 from app.agents.email_agent import process_email
-from app.agents.calendar_agent import process_schedule, process_reschedule
-from app.agents.conflict_agent import find_alternatives
-from app.agents.notification_agent import send_notification, send_reply
-from app.agents.chat_agent import chat
+from app.agents.calendar_agent import (
+    check_calendar_availability,
+    check_reschedule_availability,
+)
 from app.agents.email_intelligence_agent import process_email as classify_intelligence
-from app.db.sqlite import insert_email_analysis
+from app.db.sqlite import insert_email_analysis, insert_email_insight, create_pending_action
 from app.core.logger import log_event
 
 logger = logging.getLogger(__name__)
 
-
-def _send_intelligence_notification(email, intelligence_result: dict) -> dict:
-    """
-    Gửi email phản hồi dựa trên kết quả phân tích của Email Intelligence Agent.
-
-    Định dạng: category, summary, importance_score, extracted_data.
-    """
-    category = intelligence_result.get("category", "other")
-    importance_score = intelligence_result.get("importance_score", 30)
-    summary = intelligence_result.get("summary", "- Không có tóm tắt")
-    extracted_data = intelligence_result.get("extracted_data", {})
-
-    # ── Map category to Vietnamese label ──────────────────────────────
-    category_labels = {
-        "meeting": "Họp hành",
-        "report": "Báo cáo",
-        "partnership": "Hợp tác / Đối tác",
-        "support": "Hỗ trợ",
-        "announcement": "Thông báo",
-        "other": "Khác",
-    }
-    category_display = category_labels.get(category, category)
-
-    # ── Build extracted info section ──────────────────────────────────
-    info_lines = []
-    if extracted_data.get("deadline"):
-        info_lines.append(f"Deadline: {extracted_data['deadline']}")
-    if extracted_data.get("owner"):
-        info_lines.append(f"Người phụ trách: {extracted_data['owner']}")
-    if extracted_data.get("project"):
-        info_lines.append(f"Dự án: {extracted_data['project']}")
-    if extracted_data.get("meeting_date"):
-        info_lines.append(f"Ngày họp: {extracted_data['meeting_date']}")
-    if extracted_data.get("meeting_location"):
-        info_lines.append(f"Địa điểm: {extracted_data['meeting_location']}")
-    attendees = extracted_data.get("meeting_attendees", [])
-    if attendees:
-        info_lines.append(f"Người tham dự: {', '.join(attendees)}")
-    key_points = extracted_data.get("key_points", [])
-    if key_points:
-        info_lines.append("\nÝ chính:")
-        for kp in key_points:
-            info_lines.append(f"  • {kp}")
-    action_items = extracted_data.get("action_items", [])
-    if action_items:
-        info_lines.append("\nHành động cần làm:")
-        for ai in action_items:
-            info_lines.append(f"  ☐ {ai}")
-
-    info_text = "\n".join(
-        f"  {line}" for line in info_lines) if info_lines else "  (không có thông tin bổ sung)"
-
-    body = (
-        "Xin chào,\n\n"
-        "Chúng tôi đã phân tích email của bạn.\n\n"
-        f"Phân loại: {category_display}\n\n"
-        f"Tóm tắt:\n{summary}\n\n"
-        f"Độ ưu tiên: {importance_score}/100\n\n"
-        "Thông tin quan trọng:\n"
-        f"{info_text}\n\n"
-        "Trân trọng,\n"
-        "Email Scheduler AI"
-    )
-
-    return send_reply(
-        to_email=getattr(email, "sender", ""),
-        subject="Phản hồi tự động — Email Scheduler",
-        body_text=body,
-    )
+LOW_CONFIDENCE_THRESHOLD = 0.5
 
 
-async def _handle_send_email(email, email_result: dict) -> dict:
-    """Xử lý intent send_email: soạn và gửi email mới."""
+def _build_schedule_recommendation(calendar_result: dict) -> str:
+    status = calendar_result.get("status")
+    time_str = calendar_result.get("start", "")
     try:
-        summary = email_result.get("summary", "")
-        sender = getattr(email, "sender", "")
-        log_event(agent="orchestrator",
-                  status="send_email_started", payload=email_result)
-
-        # Gửi email xác nhận đã nhận yêu cầu soạn email
-        body = "Xin chào,\n\n"
-        body += "Hệ thống đã nhận yêu cầu soạn email của bạn.\n\n"
-        if summary:
-            body += f"Nội dung yêu cầu: {summary}\n\n"
-        body += "Chức năng soạn email đang được phát triển. "
-        body += "Tính năng đầy đủ sẽ sớm được triển khai.\n\n"
-        body += "Trân trọng,\nEmail Scheduler AI"
-
-        noti_result = send_reply(
-            to_email=sender,
-            subject="Phản hồi tự động — Email Scheduler",
-            body_text=body,
-        )
-        log_event(agent="notification_agent", status=noti_result.get(
-            "status"), payload=noti_result)
-        return {"type": "send_email_flow", "data": {"email": email_result, "notification": noti_result}}
-    except Exception as e:
-        log_event(agent="orchestrator",
-                  status="send_email_error", payload={"error": str(e)})
-        return {"type": "send_email_flow", "data": {"email": email_result, "error": str(e)}}
+        from datetime import datetime
+        dt = datetime.fromisoformat(time_str)
+        time_label = dt.strftime("%H:%M %d/%m/%Y")
+    except (ValueError, TypeError):
+        time_label = time_str
+    if status == "free":
+        return f"Chấp nhận: Khung giờ {time_label} trống lịch"
+    if status == "conflict":
+        return f"Bận: {time_label} đã có lịch — nên đề xuất giờ khác"
+    return "Kiểm tra lịch thất bại — xem lại thủ công"
 
 
-async def _handle_reply_email(email, email_result: dict) -> dict:
-    """Xử lý intent reply_email: trả lời email."""
+def _build_reschedule_recommendation(calendar_result: dict) -> str:
+    status = calendar_result.get("status")
+    time_str = calendar_result.get("start", "")
     try:
-        summary = email_result.get("summary", "")
-        sender = getattr(email, "sender", "")
-        log_event(agent="orchestrator",
-                  status="reply_email_started", payload=email_result)
+        from datetime import datetime
+        dt = datetime.fromisoformat(time_str)
+        time_label = dt.strftime("%H:%M %d/%m/%Y")
+    except (ValueError, TypeError):
+        time_label = time_str
+    if status == "free":
+        return f"Chấp nhận dời lịch sang {time_label}"
+    if status == "conflict":
+        return f"Bận: {time_label} đã có lịch — nên đề xuất giờ khác"
+    if status == "not_found":
+        return "Không tìm thấy lịch cũ — kiểm tra thủ công"
+    return "Kiểm tra dời lịch thất bại — xem lại thủ công"
 
-        # Gửi email xác nhận đã nhận yêu cầu trả lời email
-        body = "Xin chào,\n\n"
-        body += "Hệ thống đã nhận yêu cầu trả lời email của bạn.\n\n"
-        if summary:
-            body += f"Nội dung yêu cầu: {summary}\n\n"
-        body += "Chức năng trả lời email đang được phát triển. "
-        body += "Tính năng đầy đủ sẽ sớm được triển khai.\n\n"
-        body += "Trân trọng,\nEmail Scheduler AI"
 
-        noti_result = send_reply(
-            to_email=sender,
-            subject="Phản hồi tự động — Email Scheduler",
-            body_text=body,
+def _store_email_insight(email, email_result: dict):
+    """
+    Store every incoming email as an email_insight record with AI enrichment.
+    The dashboard behaves like an AI-enhanced inbox, not a filtered notification list.
+    """
+    gmail_message_id = email_result.get(
+        "gmail_message_id") or getattr(email, "gmail_message_id", None)
+    try:
+        row_id = insert_email_insight(
+            gmail_message_id=gmail_message_id,
+            sender=getattr(email, "sender", ""),
+            subject=getattr(email, "subject", ""),
+            category=email_result.get("category", "Other"),
+            summary=email_result.get("summary", ""),
+            priority=email_result.get("priority", "Low"),
+            action_required=email_result.get("action_required", False),
+            important_note=email_result.get("important_note"),
         )
-        log_event(agent="notification_agent", status=noti_result.get(
-            "status"), payload=noti_result)
-        return {"type": "reply_email_flow", "data": {"email": email_result, "notification": noti_result}}
-    except Exception as e:
-        log_event(agent="orchestrator",
-                  status="reply_email_error", payload={"error": str(e)})
-        return {"type": "reply_email_flow", "data": {"email": email_result, "error": str(e)}}
-
-
-async def _send_fallback_notification(email) -> dict:
-    """
-    Gửi email phản hồi fallback khi không thể phân tích email.
-    """
-    fallback_body = (
-        "Xin chào,\n\n"
-        "Hệ thống Email Scheduler đã nhận được email của bạn "
-        "nhưng không thể xác định yêu cầu cụ thể.\n\n"
-        "Vui lòng gửi lại email với nội dung rõ ràng hơn "
-        "(ví dụ: đặt lịch họp, dời lịch, soạn email, hoặc "
-        "hỏi về lịch trống).\n\n"
-        "Trân trọng,\n"
-        "Email Scheduler AI"
-    )
-    return send_reply(
-        to_email=getattr(email, "sender", ""),
-        subject="Phản hồi tự động — Email Scheduler",
-        body_text=fallback_body,
-    )
+        logger.info("[Orchestrator] Stored email_insight row_id=%d | sender=%s",
+                    row_id, getattr(email, "sender", ""))
+    except Exception as db_err:
+        logger.error(
+            "[Orchestrator] Failed to store email_insight: %s: %s | sender=%s",
+            type(db_err).__name__, db_err, getattr(email, "sender", ""),
+        )
 
 
 async def run_pipeline(email) -> dict:
+    """
+    Classify the incoming email and route to the appropriate handler.
+
+    HITL contract: this pipeline never creates calendar events, sends emails,
+    or modifies any external state.  It only stores pending_actions rows so
+    the user can review and confirm each action via the Dashboard.
+
+    Every email is always stored in email_insights with AI enrichment.
+    """
     email_result = process_email(email)
     log_event(agent="email_agent", status=email_result.get(
         "intent", "unknown"), payload=email_result)
-    intent = email_result.get("intent", "other")
+
+    # ── Store every email in email_insights (AI-enhanced inbox) ────────────
+    _store_email_insight(email, email_result)
+
+    intent      = email_result.get("intent", "other")
+    confidence  = float(email_result.get("confidence") or 0.0)
+    sender      = getattr(email, "sender", "")
+    subject     = getattr(email, "subject", "")
+    gmail_id    = getattr(email, "gmail_message_id", None)
+
+    # ── Low-confidence gate ─────────────────────────────────────────────────
+    if confidence < LOW_CONFIDENCE_THRESHOLD:
+        action_id = create_pending_action(
+            action_type="unclear",
+            sender=sender,
+            subject=subject,
+            summary=email_result.get("summary"),
+            confidence=confidence,
+            options=["ignore"],
+            gmail_message_id=gmail_id,
+        )
+        log_event(agent="orchestrator", status="low_confidence_pending",
+                  payload={"confidence": confidence, "action_id": action_id})
+        logger.info("[Orchestrator] Low confidence %.2f – pending_action id=%d",
+                    confidence, action_id)
+        return {"type": "unclear_flow", "data": {"email": email_result, "action_id": action_id}}
 
     if intent == "schedule":
-        calendar_result = process_schedule(email_result)
+        calendar_result = check_calendar_availability(email_result)
         log_event(agent="calendar_agent", status=calendar_result.get(
             "status"), payload=calendar_result)
-        conflict_result = None
-        if calendar_result.get("status") == "conflict":
-            conflict_result = find_alternatives(
-                requested_time=email_result.get("time"), duration_minutes=60)
-            log_event(agent="conflict_agent", status=conflict_result.get(
-                "status"), payload=conflict_result)
-        notification_result = send_notification(
-            email, email_result, calendar_result, conflict_result)
-        log_event(agent="notification_agent", status=notification_result.get(
-            "status"), payload=notification_result)
-        return {"type": "schedule_flow", "data": {"email": email_result, "calendar": calendar_result, "conflict": conflict_result, "notification": notification_result}}
+
+        recommendation = _build_schedule_recommendation(calendar_result)
+        action_id = create_pending_action(
+            action_type="meeting_request",
+            sender=sender,
+            subject=subject,
+            summary=email_result.get("summary"),
+            recommendation=recommendation,
+            confidence=confidence,
+            options=["accept", "reject", "suggest_new_time"],
+            calendar_result=calendar_result,
+            gmail_message_id=gmail_id,
+        )
+        log_event(agent="orchestrator", status="schedule_pending", payload={
+            "calendar_status": calendar_result.get("status"),
+            "action_id": action_id,
+        })
+        logger.info("[Orchestrator] meeting_request pending_action id=%d | calendar=%s",
+                    action_id, calendar_result.get("status"))
+        return {"type": "schedule_flow", "data": {
+            "email": email_result, "calendar": calendar_result, "action_id": action_id,
+        }}
 
     elif intent == "send_email":
-        # Compose and send a new email based on user request
-        return await _handle_send_email(email, email_result)
+        logger.info(
+            "[Orchestrator] send_email intent – email log only | sender=%s", sender)
+        log_event(agent="orchestrator",
+                  status="send_email_logged", payload=email_result)
+        return {"type": "send_email_flow", "data": {"email": email_result}}
 
     elif intent == "reply_email":
-        # Reply to an email thread based on user request
-        return await _handle_reply_email(email, email_result)
+        logger.info(
+            "[Orchestrator] reply_email intent – email log only | sender=%s", sender)
+        log_event(agent="orchestrator",
+                  status="reply_email_logged", payload=email_result)
+        return {"type": "reply_email_flow", "data": {"email": email_result}}
 
     elif intent == "reschedule":
-        calendar_result = process_reschedule(email_result)
+        calendar_result = check_reschedule_availability(email_result)
         log_event(agent="calendar_agent", status=calendar_result.get(
             "status"), payload=calendar_result)
-        conflict_result = None
-        if calendar_result.get("status") == "conflict":
-            conflict_result = find_alternatives(
-                requested_time=email_result.get("time"), duration_minutes=60)
-            log_event(agent="conflict_agent", status=conflict_result.get(
-                "status"), payload=conflict_result)
-        notification_result = send_notification(
-            email, email_result, calendar_result, conflict_result)
-        log_event(agent="notification_agent", status=notification_result.get(
-            "status"), payload=notification_result)
-        return {"type": "reschedule_flow", "data": {"email": email_result, "calendar": calendar_result, "conflict": conflict_result, "notification": notification_result}}
+
+        recommendation = _build_reschedule_recommendation(calendar_result)
+        action_id = create_pending_action(
+            action_type="meeting_reschedule",
+            sender=sender,
+            subject=subject,
+            summary=email_result.get("summary"),
+            recommendation=recommendation,
+            confidence=confidence,
+            options=["accept", "reject", "suggest_new_time"],
+            calendar_result=calendar_result,
+            gmail_message_id=gmail_id,
+        )
+        log_event(agent="orchestrator", status="reschedule_pending", payload={
+            "calendar_status": calendar_result.get("status"),
+            "action_id": action_id,
+        })
+        logger.info("[Orchestrator] meeting_reschedule pending_action id=%d | calendar=%s",
+                    action_id, calendar_result.get("status"))
+        return {"type": "reschedule_flow", "data": {
+            "email": email_result, "calendar": calendar_result, "action_id": action_id,
+        }}
 
     elif intent == "inquiry":
-        try:
-            reply_text = chat(
-                [{"role": "user", "content": getattr(email, "body", "")}]).get("reply", "")
-            noti_result = send_reply(
-                to_email=getattr(email, "sender", ""),
-                subject="Phản hồi tự động — Email Scheduler",
-                body_text=reply_text,
-            )
-            log_event(agent="notification_agent", status=noti_result.get(
-                "status"), payload=noti_result)
-            log_event(agent="orchestrator",
-                      status="inquiry_done", payload=email_result)
-            return {"type": "inquiry_flow", "data": {"email": email_result, "reply": reply_text, "notification": noti_result}}
-        except Exception as e:
-            log_event(agent="orchestrator",
-                      status="inquiry_error", payload={"error": str(e)})
-            return {"type": "inquiry_flow", "data": {"email": email_result, "notification": {"status": "error", "message": str(e)}}}
+        logger.info(
+            "[Orchestrator] inquiry intent – logged, no auto-reply | sender=%s", sender)
+        log_event(agent="orchestrator",
+                  status="inquiry_logged", payload=email_result)
+        return {"type": "inquiry_flow", "data": {"email": email_result}}
 
     else:
         # "other" intent — email không liên quan lịch họp
-        # → phân tích bằng Email Intelligence Agent
+        # → phân tích bằng Email Intelligence Agent, lưu vào SQLite
         try:
             intelligence_result = classify_intelligence(email)
             log_event(agent="email_intelligence_agent",
@@ -282,27 +242,19 @@ async def run_pipeline(email) -> dict:
                               "sender": getattr(email, "sender", ""),
                           })
 
-            # ── Gửi email phản hồi với kết quả phân tích ──────────────────
-            noti_result = _send_intelligence_notification(
-                email, intelligence_result)
-            log_event(agent="notification_agent", status=noti_result.get(
-                "status"), payload=noti_result)
             log_event(agent="orchestrator",
-                      status="other_analyzed", payload={"category": intelligence_result.get("category")})
+                      status="other_analyzed", payload={
+                          "category": intelligence_result.get("category"),
+                          "importance_score": importance_score,
+                      })
             return {
                 "type": "other_flow",
                 "data": {
                     "email": email_result,
                     "intelligence": intelligence_result,
-                    "notification": noti_result,
                 },
             }
         except Exception as e:
             log_event(agent="orchestrator",
                       status="other_error", payload={"error": str(e)})
-            # Gửi email phản hồi cố định khi intelligence agent lỗi
-            try:
-                noti_result = await _send_fallback_notification(email)
-                return {"type": "other_flow", "data": {"email": email_result, "notification": noti_result}}
-            except Exception:
-                return {"type": "other_flow", "data": {"email": email_result, "notification": {"status": "error", "message": str(e)}}}
+            return {"type": "other_flow", "data": {"email": email_result, "error": str(e)}}

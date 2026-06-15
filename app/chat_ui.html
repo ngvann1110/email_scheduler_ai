@@ -981,6 +981,87 @@
             color: #6b7280;
         }
 
+        /* Email Insight category badges */
+        .category-badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        .category-badge.meeting {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .category-badge.report {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .category-badge.partnership {
+            background: #ede9fe;
+            color: #6b21a8;
+        }
+
+        .category-badge.support {
+            background: #fce7f3;
+            color: #9d174d;
+        }
+
+        .category-badge.announcement {
+            background: #e0e7ff;
+            color: #3730a3;
+        }
+
+        .category-badge.other {
+            background: #f1f5f9;
+            color: #475569;
+        }
+
+        .priority-badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        .priority-badge.high {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .priority-badge.medium {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .priority-badge.low {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .summary-cell {
+            max-width: 260px;
+            font-size: 12px;
+            color: var(--muted);
+            line-height: 1.4;
+        }
+
+        .attention-cell {
+            max-width: 220px;
+            font-size: 12px;
+            color: #b45309;
+            line-height: 1.4;
+        }
+
+        .attention-cell .attn-high {
+            color: #dc2626;
+            font-weight: 700;
+        }
+
         /* Filter bar */
         .filter-bar {
             display: flex;
@@ -1128,6 +1209,34 @@
             font-size: 12px;
             color: var(--muted);
             white-space: nowrap;
+        }
+
+        /* Upcoming section range bar */
+        .upcoming-range-bar {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+
+        /* Countdown pill next to event time */
+        .event-countdown {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+            background: #ede9fe;
+            color: #6d28d9;
+            margin-left: 6px;
+        }
+        .event-countdown.today   { background: #dcfce7; color: #16a34a; }
+        .event-countdown.soon    { background: #fef9c3; color: #854d0e; }
+
+        /* Attendee count chip */
+        .attendee-chip {
+            display: inline-block;
+            font-size: 11px;
+            color: var(--text2);
         }
 
         /* Event link in table */
@@ -1287,6 +1396,166 @@
             padding: 12px;
         }
 
+        /* ── Section header (title + count badge) ────────────────────────── */
+        .section-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+        .section-header h3 { margin-bottom: 0; }
+
+        .badge-count {
+            background: var(--accent);
+            color: white;
+            border-radius: 20px;
+            padding: 2px 10px;
+            font-size: 12px;
+            font-weight: 700;
+            min-width: 24px;
+            text-align: center;
+        }
+
+        /* ── Action type badge ────────────────────────────────────────────── */
+        .action-type-badge {
+            display: inline-block;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--muted);
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 2px 7px;
+            white-space: nowrap;
+        }
+
+        /* ── Mark-done button ─────────────────────────────────────────────── */
+        .action-done-btn {
+            background: #dcfce7;
+            color: #16a34a;
+            border: 1px solid #86efac;
+            border-radius: 6px;
+            padding: 4px 10px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: inherit;
+            transition: background 0.2s;
+            white-space: nowrap;
+        }
+        .action-done-btn:hover { background: #bbf7d0; }
+        .action-done-btn:disabled { opacity: 0.5; cursor: default; }
+
+        /* ── Activity log styles ─────────────────────────────────────────── */
+        .agent-tag {
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            background: var(--surface2);
+            padding: 2px 7px;
+            border-radius: 6px;
+            color: var(--accent);
+        }
+        .payload-cell {
+            max-width: 320px;
+            font-size: 12px;
+            color: var(--text2);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .payload-key {
+            color: var(--text);
+            font-weight: 600;
+        }
+
+        /* ── Confidence badge ────────────────────────────────────────────── */
+        .confidence-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .confidence-high { background: #dcfce7; color: #16a34a; }
+        .confidence-mid  { background: #fef9c3; color: #854d0e; }
+        .confidence-low  { background: #fee2e2; color: #dc2626; }
+        .ai-reco-cell {
+            max-width: 200px;
+            font-size: 12px;
+            color: var(--text2);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* ── Date Slicer ─────────────────────────────────────────────────── */
+        .date-slicer {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 12px 20px;
+            margin: 0 0 4px 0;
+            flex-wrap: wrap;
+        }
+
+        .slicer-label {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--text);
+            white-space: nowrap;
+        }
+
+        .slicer-sep { color: var(--muted); font-weight: 600; }
+
+        .date-slicer input[type="date"] {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 6px 10px;
+            font-size: 13px;
+            color: var(--text);
+            background: var(--surface);
+            font-family: inherit;
+            cursor: pointer;
+        }
+
+        .slicer-btn {
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 7px 16px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: inherit;
+            transition: background 0.2s;
+        }
+        .slicer-btn:hover { background: #2563eb; }
+
+        .slicer-presets {
+            display: flex;
+            gap: 6px;
+            margin-left: auto;
+        }
+
+        .preset-btn {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 5px 14px;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--muted);
+            cursor: pointer;
+            font-family: inherit;
+            transition: all 0.2s;
+        }
+        .preset-btn:hover { border-color: var(--accent); color: var(--accent); }
+        .preset-btn.active { background: var(--accent); border-color: var(--accent); color: white; }
+
         /* ── App Container ───────────────────────────────────────────────── */
         #appContainer {
             display: none;
@@ -1336,6 +1605,7 @@
             <div class="tab-nav">
                 <button class="tab-btn active" data-tab="chat">💬 Chat</button>
                 <button class="tab-btn" data-tab="dashboard">📊 Dashboard<span class="tab-badge" id="meetingBadge"
+                        style="display:none;"></span><span class="tab-badge" id="unreadBadge"
                         style="display:none;"></span></button>
             </div>
             <div class="status">
@@ -1382,27 +1652,60 @@
                 <div>Đang tải dữ liệu...</div>
             </div>
 
-            <!-- Stats cards -->
+            <!-- Date Slicer (global — affects all sections) -->
+            <div class="date-slicer" id="dateSlicer" style="display:none;">
+                <span class="slicer-label">Thời gian:</span>
+                <input type="date" id="dateFrom" title="Từ ngày">
+                <span class="slicer-sep">—</span>
+                <input type="date" id="dateTo" title="Đến ngày">
+                <button class="slicer-btn" onclick="applyDateFilter()">Áp dụng</button>
+                <div class="slicer-presets">
+                    <button class="preset-btn" id="preset7d" onclick="setPreset('7d',this)">7 ngày</button>
+                    <button class="preset-btn" id="preset30d" onclick="setPreset('30d',this)">30 ngày</button>
+                    <button class="preset-btn active" id="presetAll" onclick="setPreset('all',this)">Tất cả</button>
+                </div>
+            </div>
+
+            <!-- Dashboard Summary KPI Cards -->
             <div class="stats-grid" id="statsGrid" style="display:none;">
                 <div class="stat-card">
-                    <span class="stat-icon">📅</span>
-                    <div class="stat-value" id="statUpcoming">0</div>
-                    <div class="stat-label">Lịch sắp tới</div>
-                </div>
-                <div class="stat-card success">
-                    <span class="stat-icon">✅</span>
-                    <div class="stat-value" id="statSuccess">0</div>
-                    <div class="stat-label">Thành công</div>
+                    <span class="stat-icon">📧</span>
+                    <div class="stat-value" id="statEmailsProcessed">0</div>
+                    <div class="stat-label">Email đã xử lý</div>
                 </div>
                 <div class="stat-card warning">
-                    <span class="stat-icon">⚠️</span>
-                    <div class="stat-value" id="statWarning">0</div>
-                    <div class="stat-label">Cảnh báo</div>
+                    <span class="stat-icon">⏳</span>
+                    <div class="stat-value" id="statPendingActions">0</div>
+                    <div class="stat-label">Chờ xử lý</div>
+                </div>
+                <div class="stat-card success">
+                    <span class="stat-icon">📅</span>
+                    <div class="stat-value" id="statMeetingsScheduled">0</div>
+                    <div class="stat-label">Lịch đã đặt</div>
                 </div>
                 <div class="stat-card error">
                     <span class="stat-icon">❌</span>
-                    <div class="stat-value" id="statError">0</div>
-                    <div class="stat-label">Lỗi</div>
+                    <div class="stat-value" id="statErrors">0</div>
+                    <div class="stat-label">Lỗi hệ thống</div>
+                </div>
+            </div>
+
+            <!-- Pending Actions -->
+            <div class="section-card" id="pendingActionsSection" style="display:none;">
+                <div class="section-header">
+                    <h3>⏳ Việc cần xử lý</h3>
+                    <span class="badge-count" id="pendingActionsCount" style="display:none;">0</span>
+                </div>
+                <div id="pendingActionsContent">
+                    <div class="empty-state">
+                        <span class="empty-icon">✅</span>
+                        Không có việc gì cần xử lý.
+                    </div>
+                </div>
+                <div class="pagination" id="pendingActionsPagination" style="display:none;">
+                    <button id="pendingActionsPrevPage" onclick="changePendingPage(-1)">← Trước</button>
+                    <span class="page-info" id="pendingActionsPageInfo">Trang 1 / 1</span>
+                    <button id="pendingActionsNextPage" onclick="changePendingPage(1)">Sau →</button>
                 </div>
             </div>
 
@@ -1450,7 +1753,14 @@
 
             <!-- Upcoming events -->
             <div class="section-card" id="upcomingSection" style="display:none;">
-                <h3>📅 Lịch sắp tới (7 ngày)</h3>
+                <div class="section-header">
+                    <h3>📅 Lịch sắp tới</h3>
+                    <span class="badge-count" id="upcomingCount" style="display:none;">0</span>
+                </div>
+                <div class="upcoming-range-bar">
+                    <button class="preset-btn active" id="upcomingBtn7"  onclick="setUpcomingRange(7,  this)">7 ngày</button>
+                    <button class="preset-btn"        id="upcomingBtn30" onclick="setUpcomingRange(30, this)">30 ngày</button>
+                </div>
                 <div id="upcomingContent">
                     <div class="empty-state">
                         <span class="empty-icon">📭</span>
@@ -1467,50 +1777,114 @@
                 </div>
             </div>
 
-            <!-- Event logs -->
-            <div class="section-card" id="logsSection" style="display:none;">
-                <h3>📋 Lịch sử sự kiện</h3>
-                <div class="filter-bar">
-                    <select id="filterAgent">
-                        <option value="">Tất cả agent</option>
-                        <option value="chat">Chat</option>
-                        <option value="gmail_poller">Gmail Poller</option>
-                        <option value="email_agent">Email Agent</option>
-                        <option value="calendar_agent">Calendar Agent</option>
-                        <option value="notification_agent">Notification Agent</option>
-                        <option value="evaluation_agent">Evaluation Agent</option>
-                        <option value="spam_filter">Spam Filter</option>
-                        <option value="orchestrator">Orchestrator</option>
-                        <option value="webhook">Webhook</option>
-                    </select>
-                    <select id="filterStatus">
-                        <option value="">Tất cả trạng thái</option>
-                        <option value="ok">OK</option>
-                        <option value="error">Error</option>
-                        <option value="spam">Spam</option>
-                        <option value="received">Received</option>
-                        <option value="processed">Processed</option>
-                        <option value="created">Created</option>
-                        <option value="rescheduled">Rescheduled</option>
-                        <option value="conflict">Conflict</option>
-                        <option value="sent">Sent</option>
-                        <option value="success">Success</option>
-                        <option value="failed">Failed</option>
-                        <option value="meeting_accepted">Meeting Accepted</option>
-                    </select>
-                    <input type="text" id="filterSearch" placeholder="🔍 Tìm kiếm trong payload...">
-                    <button class="filter-btn" onclick="applyLogFilters()">Lọc</button>
+            <!-- Email Insights -->
+            <div class="section-card" id="insightsSection" style="display:none;">
+                <div class="section-header">
+                    <h3>📋 Inbox Insights</h3>
+                    <span class="badge-count" id="insightsCount" style="display:none;">0</span>
                 </div>
-                <div id="logsContent">
+                <div class="filter-bar">
+                    <select id="filterCategory">
+                        <option value="">Tất cả phân loại</option>
+                        <option value="meeting">Meeting</option>
+                        <option value="report">Report</option>
+                        <option value="partnership">Partnership</option>
+                        <option value="support">Support</option>
+                        <option value="announcement">Announcement</option>
+                        <option value="other">Other</option>
+                    </select>
+                    <select id="filterPriority">
+                        <option value="">Tất cả mức độ</option>
+                        <option value="urgent">Khẩn cấp</option>
+                        <option value="high">Cao</option>
+                        <option value="medium">Trung bình</option>
+                        <option value="low">Thấp</option>
+                    </select>
+                    <select id="filterReadStatus">
+                        <option value="">Tất cả</option>
+                        <option value="0">Chưa đọc</option>
+                        <option value="1">Đã đọc</option>
+                    </select>
+                    <select id="filterSortBy">
+                        <option value="created_at">Mới nhất</option>
+                        <option value="priority">Độ ưu tiên</option>
+                    </select>
+                    <input type="text" id="filterEmailSearch" placeholder="🔍 Tìm người gửi, subject...">
+                    <button class="filter-btn" onclick="applyInsightFilters()">Lọc</button>
+                </div>
+                <div id="insightsContent">
                     <div class="empty-state">
                         <span class="empty-icon">📭</span>
-                        Không có log nào.
+                        Chưa có email insights nào.
                     </div>
                 </div>
-                <div class="pagination" id="logPagination" style="display:none;">
-                    <button id="prevPage" onclick="changePage(-1)">← Trước</button>
-                    <span class="page-info" id="pageInfo">Trang 1 / 1</span>
-                    <button id="nextPage" onclick="changePage(1)">Sau →</button>
+                <div class="pagination" id="insightPagination" style="display:none;">
+                    <button id="insightPrevPage" onclick="changeInsightPage(-1)">← Trước</button>
+                    <span class="page-info" id="insightPageInfo">Trang 1 / 1</span>
+                    <button id="insightNextPage" onclick="changeInsightPage(1)">Sau →</button>
+                </div>
+            </div>
+
+            <!-- Sent Emails -->
+            <div class="section-card" id="sentEmailsSection" style="display:none;">
+                <div class="section-header">
+                    <h3>📤 Email đã gửi</h3>
+                    <span class="badge-count" id="sentEmailsCount" style="display:none;">0</span>
+                </div>
+                <div id="sentEmailsContent">
+                    <div class="empty-state">
+                        <span class="empty-icon">📭</span>
+                        Chưa có email nào được gửi.
+                    </div>
+                </div>
+                <div class="pagination" id="sentEmailsPagination" style="display:none;">
+                    <button id="sentEmailsPrevPage" onclick="changeSentEmailsPage(-1)">← Trước</button>
+                    <span class="page-info" id="sentEmailsPageInfo">Trang 1 / 1</span>
+                    <button id="sentEmailsNextPage" onclick="changeSentEmailsPage(1)">Sau →</button>
+                </div>
+            </div>
+
+            <!-- AI Activity Log -->
+            <div class="section-card" id="activityLogSection" style="display:none;">
+                <div class="section-header">
+                    <h3>🤖 AI Activity Log</h3>
+                    <span class="badge-count" id="activityLogCount" style="display:none;">0</span>
+                </div>
+                <div class="filter-bar">
+                    <select id="logFilterAgent">
+                        <option value="">Tất cả agent</option>
+                        <option value="email_agent">email_agent</option>
+                        <option value="calendar_agent">calendar_agent</option>
+                        <option value="orchestrator">orchestrator</option>
+                        <option value="notification_agent">notification_agent</option>
+                        <option value="spam_filter">spam_filter</option>
+                        <option value="conflict_agent">conflict_agent</option>
+                        <option value="evaluation_agent">evaluation_agent</option>
+                        <option value="chat">chat</option>
+                    </select>
+                    <select id="logFilterStatus">
+                        <option value="">Tất cả trạng thái</option>
+                        <option value="success">success</option>
+                        <option value="error">error</option>
+                        <option value="warning">warning</option>
+                        <option value="created">created</option>
+                        <option value="spam">spam</option>
+                        <option value="conflict">conflict</option>
+                        <option value="meeting_accepted">meeting_accepted</option>
+                    </select>
+                    <input type="text" id="logFilterSearch" placeholder="🔍 Tìm trong payload...">
+                    <button class="filter-btn" onclick="applyLogFilters()">Lọc</button>
+                </div>
+                <div id="activityLogContent">
+                    <div class="empty-state">
+                        <span class="empty-icon">📋</span>
+                        Chưa có hoạt động nào.
+                    </div>
+                </div>
+                <div class="pagination" id="activityLogPagination" style="display:none;">
+                    <button id="activityLogPrevPage" onclick="changeLogPage(-1)">← Trước</button>
+                    <span class="page-info" id="activityLogPageInfo">Trang 1 / 1</span>
+                    <button id="activityLogNextPage" onclick="changeLogPage(1)">Sau →</button>
                 </div>
             </div>
         </div>
@@ -1837,6 +2211,369 @@
             refreshInterval: null,
         };
 
+        // Global date filter (shared by all dashboard sections)
+        let currentDateFrom = null;
+        let currentDateTo   = null;
+
+        function setPreset(preset, btn) {
+            document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            const today = new Date();
+            const fmt = d => d.toISOString().split('T')[0];
+            if (preset === '7d') {
+                const from = new Date(today); from.setDate(from.getDate() - 7);
+                currentDateFrom = fmt(from); currentDateTo = fmt(today);
+            } else if (preset === '30d') {
+                const from = new Date(today); from.setDate(from.getDate() - 30);
+                currentDateFrom = fmt(from); currentDateTo = fmt(today);
+            } else {
+                currentDateFrom = null; currentDateTo = null;
+            }
+            document.getElementById('dateFrom').value = currentDateFrom || '';
+            document.getElementById('dateTo').value   = currentDateTo   || '';
+            loadDashboardSummary();
+            loadPendingActions();
+            dashboardState.currentPage = 1;
+            fetchDashboardInsights();
+            sentEmailsState.currentPage = 1;
+            loadSentEmails();
+            activityLogState.currentPage = 1;
+            loadActivityLog();
+        }
+
+        function applyDateFilter() {
+            currentDateFrom = document.getElementById('dateFrom').value || null;
+            currentDateTo   = document.getElementById('dateTo').value   || null;
+            // Clear preset highlight when user types manually
+            document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+            loadDashboardSummary();
+            loadPendingActions();
+            dashboardState.currentPage = 1;
+            fetchDashboardInsights();
+            sentEmailsState.currentPage = 1;
+            loadSentEmails();
+            activityLogState.currentPage = 1;
+            loadActivityLog();
+        }
+
+        async function loadDashboardSummary() {
+            try {
+                const params = new URLSearchParams();
+                if (currentDateFrom) params.set('date_from', currentDateFrom);
+                if (currentDateTo)   params.set('date_to',   currentDateTo);
+                const res = await fetch(`${API}/dashboard/summary?${params}`, { credentials: 'include' });
+                if (res.status === 401) return;
+                const data = await res.json();
+
+                document.getElementById('dashboardLoading').style.display = 'none';
+                document.getElementById('dateSlicer').style.display = 'flex';
+                document.getElementById('statsGrid').style.display   = 'grid';
+
+                document.getElementById('statEmailsProcessed').textContent = data.emails_processed   ?? 0;
+                document.getElementById('statPendingActions').textContent   = data.pending_actions    ?? 0;
+                document.getElementById('statMeetingsScheduled').textContent= data.meetings_scheduled ?? 0;
+                document.getElementById('statErrors').textContent           = data.errors             ?? 0;
+            } catch (err) {
+                console.error('Dashboard summary error:', err);
+            }
+        }
+
+        // ── Pending Actions ───────────────────────────────────────────────
+        let pendingState = { currentPage: 1, pageSize: 10, totalPages: 1 };
+
+        async function loadPendingActions() {
+            try {
+                const params = new URLSearchParams({
+                    page: pendingState.currentPage,
+                    page_size: pendingState.pageSize,
+                });
+                if (currentDateFrom) params.set('date_from', currentDateFrom);
+                if (currentDateTo)   params.set('date_to',   currentDateTo);
+
+                const res = await fetch(`${API}/dashboard/pending-actions?${params}`, { credentials: 'include' });
+                if (res.status === 401) return;
+                const data = await res.json();
+
+                const section   = document.getElementById('pendingActionsSection');
+                const content   = document.getElementById('pendingActionsContent');
+                const countBadge= document.getElementById('pendingActionsCount');
+                const items     = data.items || [];
+                const total     = data.total  || 0;
+
+                pendingState.totalPages = Math.max(1, Math.ceil(total / pendingState.pageSize));
+                section.style.display   = 'block';
+
+                // Update count badge
+                if (total > 0) {
+                    countBadge.textContent    = total;
+                    countBadge.style.display  = 'inline-block';
+                } else {
+                    countBadge.style.display  = 'none';
+                }
+
+                // Pagination
+                const pagination = document.getElementById('pendingActionsPagination');
+                pagination.style.display = total > pendingState.pageSize ? 'flex' : 'none';
+                document.getElementById('pendingActionsPageInfo').textContent =
+                    `Trang ${pendingState.currentPage} / ${pendingState.totalPages}`;
+                document.getElementById('pendingActionsPrevPage').disabled =
+                    pendingState.currentPage <= 1;
+                document.getElementById('pendingActionsNextPage').disabled =
+                    pendingState.currentPage >= pendingState.totalPages;
+
+                if (items.length === 0) {
+                    content.innerHTML = '<div class="empty-state"><span class="empty-icon">✅</span>Không có việc gì cần xử lý.</div>';
+                    return;
+                }
+
+                const sourceIcon = s => s === 'email_action' ? '📧' : s === 'meeting_invite' ? '📅' : '🔄';
+                const priBadge   = p => {
+                    if (!p) return '—';
+                    const label = p === 'high' ? 'Cao' : p === 'medium' ? 'Trung bình' : 'Thấp';
+                    return `<span class="priority-badge ${p.toLowerCase()}">${label}</span>`;
+                };
+
+                let html = `<table class="dashboard-table"><thead><tr>
+                    <th>Loại</th><th>Người gửi</th><th>Nội dung</th>
+                    <th>Ưu tiên</th><th>Thời gian</th><th>Hành động</th>
+                </tr></thead><tbody>`;
+
+                items.forEach(item => {
+                    let timeStr = item.created_at || '';
+                    try {
+                        const d = new Date(item.created_at);
+                        timeStr = d.toLocaleDateString('vi-VN') + ' ' +
+                                  d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+                    } catch (e) {}
+
+                    const doneBtn = (item.source === 'email_action' && item.id)
+                        ? `<button class="action-done-btn" onclick="markPendingDone(${item.id},this)">✓ Xong</button>`
+                        : '—';
+
+                    html += `<tr>
+                        <td>${sourceIcon(item.source)} <span class="action-type-badge">${escapeHtml(item.action_type||'—')}</span></td>
+                        <td>${escapeHtml(item.sender||'—')}</td>
+                        <td><div class="summary-cell">${escapeHtml(item.subject||'—')}</div></td>
+                        <td>${priBadge(item.priority)}</td>
+                        <td class="ts-cell">${timeStr}</td>
+                        <td>${doneBtn}</td>
+                    </tr>`;
+                });
+                html += '</tbody></table>';
+                content.innerHTML = html;
+            } catch (err) {
+                console.error('Pending actions error:', err);
+            }
+        }
+
+        async function markPendingDone(insightId, btn) {
+            btn.disabled    = true;
+            btn.textContent = '...';
+            try {
+                const res = await fetch(`${API}/dashboard/mark-read/${insightId}`, {
+                    method: 'POST', credentials: 'include',
+                });
+                if (res.ok) {
+                    btn.closest('tr').style.opacity = '0.4';
+                    btn.textContent = '✓';
+                    // Refresh both the summary KPI and the pending list
+                    await Promise.all([loadDashboardSummary(), loadPendingActions()]);
+                } else {
+                    btn.disabled    = false;
+                    btn.textContent = '✓ Xong';
+                }
+            } catch (err) {
+                btn.disabled    = false;
+                btn.textContent = '✓ Xong';
+            }
+        }
+
+        function changePendingPage(delta) {
+            const next = pendingState.currentPage + delta;
+            if (next < 1 || next > pendingState.totalPages) return;
+            pendingState.currentPage = next;
+            loadPendingActions();
+        }
+
+        // ── Sent Emails ───────────────────────────────────────────────────
+        let sentEmailsState = { currentPage: 1, pageSize: 15, totalPages: 1 };
+
+        const TRIGGERED_LABELS = {
+            meeting_invite:          '📅 Mời họp',
+            reschedule_permission:   '🔄 Xin phép dời',
+            reschedule_notification: '🔄 Thông báo dời',
+            reschedule_accepted:     '✅ Đồng ý dời',
+            reschedule_declined:     '❌ Từ chối dời',
+            cancel_notification:     '🚫 Thông báo huỷ',
+            organizer_notification:  '📣 Thông báo tổ chức',
+            system:                  '⚙ Hệ thống',
+        };
+
+        async function loadSentEmails() {
+            try {
+                const params = new URLSearchParams({
+                    page: sentEmailsState.currentPage,
+                    page_size: sentEmailsState.pageSize,
+                });
+                if (currentDateFrom) params.set('date_from', currentDateFrom);
+                if (currentDateTo)   params.set('date_to',   currentDateTo);
+
+                const res = await fetch(`${API}/dashboard/sent-emails?${params}`, { credentials: 'include' });
+                if (res.status === 401) return;
+                const data = await res.json();
+
+                const section    = document.getElementById('sentEmailsSection');
+                const contentEl  = document.getElementById('sentEmailsContent');
+                const badge      = document.getElementById('sentEmailsCount');
+                const pagination = document.getElementById('sentEmailsPagination');
+
+                section.style.display = 'block';
+
+                const items = data.items || [];
+                const total = data.total || 0;
+                sentEmailsState.totalPages = Math.max(1, Math.ceil(total / sentEmailsState.pageSize));
+
+                if (total > 0) { badge.textContent = total; badge.style.display = 'inline-block'; }
+                else { badge.style.display = 'none'; }
+
+                pagination.style.display = total > sentEmailsState.pageSize ? 'flex' : 'none';
+                document.getElementById('sentEmailsPageInfo').textContent =
+                    `Trang ${sentEmailsState.currentPage} / ${sentEmailsState.totalPages}`;
+                document.getElementById('sentEmailsPrevPage').disabled = sentEmailsState.currentPage <= 1;
+                document.getElementById('sentEmailsNextPage').disabled = sentEmailsState.currentPage >= sentEmailsState.totalPages;
+
+                if (items.length === 0) {
+                    contentEl.innerHTML = '<div class="empty-state"><span class="empty-icon">📭</span>Chưa có email nào được gửi.</div>';
+                    return;
+                }
+
+                let html = `<table class="dashboard-table"><thead><tr>
+                    <th>Người nhận</th><th>Tiêu đề</th><th>Loại</th><th>Thời gian gửi</th>
+                </tr></thead><tbody>`;
+                items.forEach(e => {
+                    let timeStr = e.sent_at || '';
+                    try {
+                        const d = new Date(e.sent_at);
+                        timeStr = d.toLocaleDateString('vi-VN') + ' ' + d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+                    } catch (_) {}
+                    const triggerLabel = TRIGGERED_LABELS[e.triggered_by] || escapeHtml(e.triggered_by || '—');
+                    html += `<tr>
+                        <td><strong>${escapeHtml(e.to_addr || '—')}</strong></td>
+                        <td>${escapeHtml(e.subject || '—')}</td>
+                        <td><span class="action-type-badge">${triggerLabel}</span></td>
+                        <td class="ts-cell">${timeStr}</td>
+                    </tr>`;
+                });
+                html += '</tbody></table>';
+                contentEl.innerHTML = html;
+            } catch (err) {
+                console.error('Sent emails error:', err);
+            }
+        }
+
+        function changeSentEmailsPage(delta) {
+            const next = sentEmailsState.currentPage + delta;
+            if (next < 1 || next > sentEmailsState.totalPages) return;
+            sentEmailsState.currentPage = next;
+            loadSentEmails();
+        }
+
+        // ── AI Activity Log ───────────────────────────────────────────────
+        let activityLogState = { currentPage: 1, pageSize: 20, totalPages: 1 };
+
+        async function loadActivityLog() {
+            try {
+                const agent  = document.getElementById('logFilterAgent').value;
+                const status = document.getElementById('logFilterStatus').value;
+                const search = document.getElementById('logFilterSearch').value;
+                const params = new URLSearchParams({
+                    page:      activityLogState.currentPage,
+                    page_size: activityLogState.pageSize,
+                });
+                if (agent)  params.set('agent',  agent);
+                if (status) params.set('status', status);
+                if (search) params.set('search', search);
+                if (currentDateFrom) params.set('date_from', currentDateFrom);
+                if (currentDateTo)   params.set('date_to',   currentDateTo);
+
+                const res = await fetch(`${API}/dashboard/logs?${params}`, { credentials: 'include' });
+                if (res.status === 401) return;
+                const data = await res.json();
+
+                const section    = document.getElementById('activityLogSection');
+                const contentEl  = document.getElementById('activityLogContent');
+                const badge      = document.getElementById('activityLogCount');
+                const pagination = document.getElementById('activityLogPagination');
+
+                section.style.display = 'block';
+
+                const items = data.items || [];
+                const total = data.total || 0;
+                activityLogState.totalPages = Math.max(1, Math.ceil(total / activityLogState.pageSize));
+
+                if (total > 0) { badge.textContent = total; badge.style.display = 'inline-block'; }
+                else { badge.style.display = 'none'; }
+
+                pagination.style.display = total > activityLogState.pageSize ? 'flex' : 'none';
+                document.getElementById('activityLogPageInfo').textContent =
+                    `Trang ${activityLogState.currentPage} / ${activityLogState.totalPages}`;
+                document.getElementById('activityLogPrevPage').disabled = activityLogState.currentPage <= 1;
+                document.getElementById('activityLogNextPage').disabled = activityLogState.currentPage >= activityLogState.totalPages;
+
+                if (items.length === 0) {
+                    contentEl.innerHTML = '<div class="empty-state"><span class="empty-icon">📋</span>Không có log nào khớp.</div>';
+                    return;
+                }
+
+                let html = `<table class="dashboard-table"><thead><tr>
+                    <th>Agent</th><th>Trạng thái</th><th>Payload</th><th>Thời gian</th>
+                </tr></thead><tbody>`;
+                items.forEach(item => {
+                    let timeStr = item.timestamp || '';
+                    try {
+                        const d = new Date(item.timestamp);
+                        timeStr = d.toLocaleDateString('vi-VN') + ' ' +
+                                  d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                    } catch (_) {}
+
+                    let payloadHtml = '—';
+                    try {
+                        const p = typeof item.payload === 'string' ? JSON.parse(item.payload) : (item.payload || {});
+                        const keys = Object.keys(p).slice(0, 3);
+                        payloadHtml = keys.length
+                            ? keys.map(k => `<span class="payload-key">${escapeHtml(k)}:</span> ${escapeHtml(String(p[k]).slice(0, 40))}`).join(' · ')
+                            : '{}';
+                    } catch (_) {
+                        payloadHtml = escapeHtml(String(item.payload || '').slice(0, 80));
+                    }
+
+                    const statusCls = getStatusClass(item.status);
+                    html += `<tr>
+                        <td><code class="agent-tag">${escapeHtml(item.agent || '—')}</code></td>
+                        <td><span class="status-badge ${statusCls}">${escapeHtml(item.status || '—')}</span></td>
+                        <td><div class="payload-cell">${payloadHtml}</div></td>
+                        <td class="ts-cell">${timeStr}</td>
+                    </tr>`;
+                });
+                html += '</tbody></table>';
+                contentEl.innerHTML = html;
+            } catch (err) {
+                console.error('Activity log error:', err);
+            }
+        }
+
+        function applyLogFilters() {
+            activityLogState.currentPage = 1;
+            loadActivityLog();
+        }
+
+        function changeLogPage(delta) {
+            const next = activityLogState.currentPage + delta;
+            if (next < 1 || next > activityLogState.totalPages) return;
+            activityLogState.currentPage = next;
+            loadActivityLog();
+        }
+
         // Tab switching
         document.querySelectorAll('.tab-btn').forEach(btn => {
             btn.addEventListener('click', function () {
@@ -1873,54 +2610,100 @@
         });
 
         async function loadDashboard(trackView = false) {
-            await Promise.all([fetchDashboardStats(), fetchDashboardLogs(), fetchEmailStats(trackView), fetchMeetingConfirmations()]);
+            await Promise.all([
+                loadDashboardSummary(),
+                loadPendingActions(),
+                fetchDashboardStats(),
+                fetchDashboardInsights(),
+                loadSentEmails(),
+                loadActivityLog(),
+                fetchEmailStats(trackView),
+                fetchMeetingConfirmations(),
+                fetchUnreadCount(),
+            ]);
+        }
+
+        let upcomingRangeDays = 7;
+
+        function setUpcomingRange(days, btn) {
+            upcomingRangeDays = days;
+            document.querySelectorAll('.upcoming-range-bar .preset-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            fetchDashboardStats();
+        }
+
+        function _countdownBadge(startStr) {
+            if (!startStr) return '';
+            try {
+                const now   = new Date();
+                const start = new Date(startStr);
+                const diffMs   = start - now;
+                const diffDays = Math.floor(diffMs / 86400000);
+                if (diffDays < 0)  return '';
+                if (diffDays === 0) return '<span class="event-countdown today">Hôm nay</span>';
+                if (diffDays === 1) return '<span class="event-countdown soon">Ngày mai</span>';
+                if (diffDays <= 3)  return `<span class="event-countdown soon">Còn ${diffDays} ngày</span>`;
+                return `<span class="event-countdown">Còn ${diffDays} ngày</span>`;
+            } catch (_) { return ''; }
         }
 
         async function fetchDashboardStats() {
             try {
-                const res = await fetch(`${API}/dashboard/stats`, { credentials: 'include' });
-                if (res.status === 401) {
-                    // Silently fail for dashboard when not authenticated
-                    return;
-                }
+                const res = await fetch(`${API}/dashboard/stats?range_days=${upcomingRangeDays}`, { credentials: 'include' });
+                if (res.status === 401) return;
                 const data = await res.json();
 
-                document.getElementById('dashboardLoading').style.display = 'none';
-                document.getElementById('statsGrid').style.display = 'grid';
                 document.getElementById('upcomingSection').style.display = 'block';
 
-                // Stats
-                const stats = data.stats || {};
-                const byStatus = stats.by_status || {};
-                const totalOk = (byStatus['ok'] || 0) + (byStatus['success'] || 0) + (byStatus['sent'] || 0) + (byStatus['created'] || 0) + (byStatus['processed'] || 0);
-                const totalError = byStatus['error'] || 0;
-                const totalWarning = (byStatus['conflict'] || 0) + (byStatus['spam'] || 0) + (byStatus['failed'] || 0);
-
-                document.getElementById('statUpcoming').textContent = (data.upcoming_events || []).length;
-                document.getElementById('statSuccess').textContent = totalOk;
-                document.getElementById('statWarning').textContent = totalWarning;
-                document.getElementById('statError').textContent = totalError;
-
-                // Upcoming events
                 const upcomingEl = document.getElementById('upcomingContent');
-                const events = data.upcoming_events || [];
+                const badge      = document.getElementById('upcomingCount');
+                const events     = data.upcoming_events || [];
+
+                if (events.length > 0) { badge.textContent = events.length; badge.style.display = 'inline-block'; }
+                else { badge.style.display = 'none'; }
+
                 if (events.length === 0) {
-                    upcomingEl.innerHTML = '<div class="empty-state"><span class="empty-icon">📭</span>Không có lịch nào trong 7 ngày tới.</div>';
-                } else {
-                    let html = '<table class="dashboard-table"><thead><tr><th>Nội dung</th><th>Thời gian</th><th>Địa điểm</th></tr></thead><tbody>';
-                    events.forEach(e => {
-                        let timeStr = e.start || '';
-                        try {
-                            const d = new Date(e.start);
-                            const days = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'];
-                            timeStr = `${days[d.getDay()]}, ${d.toLocaleDateString('vi-VN')} lúc ${d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`;
-                        } catch (ex) { }
-                        const link = e.link || '#';
-                        html += `<tr><td><a href="${link}" target="_blank" class="event-link">${e.summary || 'Sự kiện'}</a></td><td class="ts-cell">${timeStr}</td><td>${e.location || '—'}</td></tr>`;
-                    });
-                    html += '</tbody></table>';
-                    upcomingEl.innerHTML = html;
+                    upcomingEl.innerHTML = `<div class="empty-state"><span class="empty-icon">📭</span>Không có lịch nào trong ${upcomingRangeDays} ngày tới.</div>`;
+                    return;
                 }
+
+                const DAYS = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'];
+
+                let html = `<table class="dashboard-table"><thead><tr>
+                    <th>Nội dung</th><th>Thời gian</th><th>Kết thúc</th><th>Địa điểm</th><th>Người tham dự</th>
+                </tr></thead><tbody>`;
+
+                events.forEach(e => {
+                    let startStr = e.start || '';
+                    let endStr   = '';
+                    try {
+                        const d = new Date(e.start);
+                        startStr = `${DAYS[d.getDay()]}, ${d.toLocaleDateString('vi-VN')} lúc ${d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`;
+                    } catch (_) {}
+                    try {
+                        if (e.end) {
+                            const d = new Date(e.end);
+                            endStr = d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+                        }
+                    } catch (_) {}
+
+                    const countdown  = _countdownBadge(e.start);
+                    const link       = e.link || '#';
+                    const attendees  = (e.attendees || []);
+                    const attHtml    = attendees.length
+                        ? `<span class="attendee-chip">👥 ${attendees.length} người</span>`
+                        : '—';
+
+                    html += `<tr>
+                        <td><a href="${link}" target="_blank" class="event-link">${escapeHtml(e.summary || 'Sự kiện')}</a></td>
+                        <td class="ts-cell">${startStr}${countdown}</td>
+                        <td class="ts-cell">${endStr || '—'}</td>
+                        <td>${escapeHtml(e.location || '—')}</td>
+                        <td>${attHtml}</td>
+                    </tr>`;
+                });
+                html += '</tbody></table>';
+                upcomingEl.innerHTML = html;
             } catch (err) {
                 console.error('Dashboard stats error:', err);
             }
@@ -1948,73 +2731,106 @@
             }
         }
 
-        async function fetchDashboardLogs() {
+        async function fetchDashboardInsights() {
             try {
-                const agent = document.getElementById('filterAgent').value;
-                const status = document.getElementById('filterStatus').value;
-                const search = document.getElementById('filterSearch').value;
+                const category   = document.getElementById('filterCategory').value;
+                const priority   = document.getElementById('filterPriority').value;
+                const readStatus = document.getElementById('filterReadStatus').value;
+                const sortBy     = document.getElementById('filterSortBy').value;
+                const search     = document.getElementById('filterEmailSearch').value;
                 const params = new URLSearchParams({
                     page: dashboardState.currentPage,
                     page_size: dashboardState.pageSize,
+                    sort_by: sortBy || 'created_at',
                 });
-                if (agent) params.set('agent', agent);
-                if (status) params.set('status', status);
-                if (search) params.set('search', search);
+                if (category)   params.set('category',  category);
+                if (priority)   params.set('priority',  priority);
+                if (readStatus !== '') params.set('is_read', readStatus);
+                if (search)     params.set('search',    search);
+                if (currentDateFrom) params.set('date_from', currentDateFrom);
+                if (currentDateTo)   params.set('date_to',   currentDateTo);
 
-                const res = await fetch(`${API}/dashboard/logs?${params}`, { credentials: 'include' });
-                if (res.status === 401) {
-                    // Silently fail
-                    return;
-                }
+                const res = await fetch(`${API}/dashboard/email-insights?${params}`, { credentials: 'include' });
+                if (res.status === 401) return;
                 const data = await res.json();
 
                 document.getElementById('dashboardLoading').style.display = 'none';
-                document.getElementById('logsSection').style.display = 'block';
+                document.getElementById('insightsSection').style.display = 'block';
 
                 const items = data.items || [];
                 const total = data.total || 0;
                 dashboardState.totalPages = Math.max(1, Math.ceil(total / dashboardState.pageSize));
 
-                // Update pagination
-                const pagination = document.getElementById('logPagination');
-                if (total > dashboardState.pageSize) {
-                    pagination.style.display = 'flex';
-                } else {
-                    pagination.style.display = 'none';
-                }
-                document.getElementById('pageInfo').textContent = `Trang ${dashboardState.currentPage} / ${dashboardState.totalPages}`;
-                document.getElementById('prevPage').disabled = dashboardState.currentPage <= 1;
-                document.getElementById('nextPage').disabled = dashboardState.currentPage >= dashboardState.totalPages;
+                // Badge count
+                const badge = document.getElementById('insightsCount');
+                if (total > 0) { badge.textContent = total; badge.style.display = 'inline-block'; }
+                else { badge.style.display = 'none'; }
 
-                // Render logs
-                const logsEl = document.getElementById('logsContent');
+                // Pagination
+                const pagination = document.getElementById('insightPagination');
+                pagination.style.display = total > dashboardState.pageSize ? 'flex' : 'none';
+                document.getElementById('insightPageInfo').textContent = `Trang ${dashboardState.currentPage} / ${dashboardState.totalPages}`;
+                document.getElementById('insightPrevPage').disabled = dashboardState.currentPage <= 1;
+                document.getElementById('insightNextPage').disabled = dashboardState.currentPage >= dashboardState.totalPages;
+
+                // Render
+                const insightsEl = document.getElementById('insightsContent');
                 if (items.length === 0) {
-                    logsEl.innerHTML = '<div class="empty-state"><span class="empty-icon">📭</span>Không có log nào.</div>';
+                    insightsEl.innerHTML = '<div class="empty-state"><span class="empty-icon">📭</span>Chưa có email insights nào.</div>';
                     return;
                 }
 
-                let html = '<table class="dashboard-table"><thead><tr><th>ID</th><th>Agent</th><th>Trạng thái</th><th>Payload</th><th>Thời gian</th></tr></thead><tbody>';
-                items.forEach(log => {
-                    const statusClass = getStatusClass(log.status);
-                    let payloadPreview = log.payload || '';
+                const priLabel = p => ({ urgent: 'Khẩn cấp', high: 'Cao', medium: 'Trung bình', low: 'Thấp' }[p] || p || '—');
+
+                const confBadge = c => {
+                    if (c == null) return '—';
+                    const cls = c >= 80 ? 'confidence-high' : c >= 50 ? 'confidence-mid' : 'confidence-low';
+                    return `<span class="confidence-badge ${cls}">${c}%</span>`;
+                };
+
+                let html = `<table class="dashboard-table"><thead><tr>
+                    <th>Người gửi</th><th>Subject</th><th>Tóm tắt</th>
+                    <th>Phân loại / Ưu tiên</th><th>Ghi chú AI</th>
+                    <th>Độ tin cậy</th><th>AI Gợi ý</th>
+                    <th>Trạng thái</th><th>Thời gian</th>
+                </tr></thead><tbody>`;
+                items.forEach(insight => {
+                    const cat = (insight.category || 'other').toLowerCase();
+                    const pri = (insight.priority || 'low').toLowerCase();
+
+                    let timeStr = insight.created_at || '';
                     try {
-                        const parsed = JSON.parse(payloadPreview);
-                        payloadPreview = JSON.stringify(parsed).substring(0, 80) + (JSON.stringify(parsed).length > 80 ? '...' : '');
-                    } catch (e) {
-                        payloadPreview = String(payloadPreview).substring(0, 80);
-                    }
-                    html += `<tr>
-                        <td>#${log.event_id}</td>
-                        <td><strong>${log.agent || '—'}</strong></td>
-                        <td><span class="status-badge ${statusClass}">${log.status || '—'}</span></td>
-                        <td><div class="payload-cell" title="${escapeHtml(log.payload || '')}">${escapeHtml(payloadPreview)}</div></td>
-                        <td class="ts-cell">${log.timestamp || '—'}</td>
+                        const d = new Date(insight.created_at);
+                        timeStr = d.toLocaleDateString('vi-VN') + ' ' + d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+                    } catch (e) { }
+
+                    const noteHtml = insight.action_required
+                        ? `<span class="attn-high">⚠ ${escapeHtml(insight.important_note || 'Cần xử lý')}</span>`
+                        : (insight.important_note ? escapeHtml(insight.important_note) : '—');
+
+                    const recoHtml = insight.ai_recommendation
+                        ? `<div class="ai-reco-cell" title="${escapeHtml(insight.ai_recommendation)}">${escapeHtml(insight.ai_recommendation)}</div>`
+                        : '—';
+
+                    const rowClick = insight.is_read ? '' : `onclick="markEmailAsRead(${insight.id}, this)"`;
+                    const rowStyle = insight.is_read ? '' : 'cursor:pointer;';
+
+                    html += `<tr data-insight-id="${insight.id}" class="${insight.is_read ? '' : 'unread-row'}" ${rowClick} style="${rowStyle}">
+                        <td><strong>${escapeHtml(insight.sender || '—')}</strong></td>
+                        <td>${escapeHtml(insight.subject || '—')}</td>
+                        <td><div class="summary-cell">${escapeHtml(insight.summary || '—')}</div></td>
+                        <td><span class="category-badge ${cat}">${insight.category || 'Other'}</span><br><span class="priority-badge ${pri}">${priLabel(insight.priority)}</span></td>
+                        <td><div class="attention-cell">${noteHtml}</div></td>
+                        <td>${confBadge(insight.confidence)}</td>
+                        <td>${recoHtml}</td>
+                        <td>${insight.is_read ? '✅ Đã đọc' : '<span style="color:#3b82f6;font-weight:600;">🔵 Chưa đọc</span>'}</td>
+                        <td class="ts-cell">${timeStr}</td>
                     </tr>`;
                 });
                 html += '</tbody></table>';
-                logsEl.innerHTML = html;
+                insightsEl.innerHTML = html;
             } catch (err) {
-                console.error('Dashboard logs error:', err);
+                console.error('Dashboard insights error:', err);
             }
         }
 
@@ -2110,6 +2926,56 @@
             badge.textContent = '';
         }
 
+        // ── Unread Email Badge ────────────────────────────────────────────
+        async function fetchUnreadCount() {
+            try {
+                const res = await fetch(`${API}/dashboard/unread-count`, { credentials: 'include' });
+                if (res.status === 401) return;
+                const data = await res.json();
+                updateUnreadBadge(data.unread || 0);
+            } catch (err) {
+                console.error('Unread count error:', err);
+            }
+        }
+
+        function updateUnreadBadge(count) {
+            const badge = document.getElementById('unreadBadge');
+            if (!badge) return;
+            if (count > 0) {
+                badge.textContent = count;
+                badge.style.display = 'inline-block';
+                badge.style.animation = 'none';
+                badge.offsetHeight;
+                badge.style.animation = '';
+            } else {
+                badge.style.display = 'none';
+                badge.textContent = '';
+            }
+        }
+
+        // ── Mark Email as Read ────────────────────────────────────────────
+        async function markEmailAsRead(insightId, rowElement) {
+            try {
+                const res = await fetch(`${API}/dashboard/mark-read/${insightId}`, {
+                    method: 'POST',
+                    credentials: 'include',
+                });
+                if (!res.ok) return;
+                const data = await res.json();
+                if (data.status === 'ok') {
+                    // Update the read status cell in the row
+                    const cells = rowElement.querySelectorAll('td');
+                    if (cells.length >= 7) {
+                        cells[5].innerHTML = '✅ Đã đọc';
+                    }
+                    // Refresh unread count
+                    fetchUnreadCount();
+                }
+            } catch (err) {
+                console.error('Mark read error:', err);
+            }
+        }
+
         function getStatusClass(status) {
             const map = {
                 'ok': 'ok',
@@ -2128,16 +2994,16 @@
             return map[status] || 'default';
         }
 
-        function applyLogFilters() {
+        function applyInsightFilters() {
             dashboardState.currentPage = 1;
-            fetchDashboardLogs();
+            fetchDashboardInsights();
         }
 
-        function changePage(delta) {
+        function changeInsightPage(delta) {
             const newPage = dashboardState.currentPage + delta;
             if (newPage < 1 || newPage > dashboardState.totalPages) return;
             dashboardState.currentPage = newPage;
-            fetchDashboardLogs();
+            fetchDashboardInsights();
         }
     </script>
 </body>

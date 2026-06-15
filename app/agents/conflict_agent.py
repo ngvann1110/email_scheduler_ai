@@ -1,6 +1,6 @@
 import logging
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from pathlib import Path
 
@@ -27,6 +27,7 @@ WORKING_HOURS_START = 8    # 8:00 sáng
 WORKING_HOURS_END = 18   # 6:00 chiều
 MAX_DAYS_AHEAD = 7    # tìm trong vòng 7 ngày tới
 MAX_SUGGESTIONS = 3    # đề xuất tối đa 3 khung giờ
+ICT = timezone(timedelta(hours=7))
 
 
 # ── Auth
@@ -49,9 +50,11 @@ def _get_service():
 # ── Helpers
 def _is_slot_free(service, start_dt: datetime, end_dt: datetime) -> bool:
     """Kiểm tra 1 khung giờ có trống không."""
+    start_utc = start_dt.replace(tzinfo=ICT).astimezone(timezone.utc)
+    end_utc   = end_dt.replace(tzinfo=ICT).astimezone(timezone.utc)
     body = {
-        "timeMin": start_dt.isoformat() + "Z",
-        "timeMax": end_dt.isoformat() + "Z",
+        "timeMin": start_utc.isoformat().replace("+00:00", "Z"),
+        "timeMax": end_utc.isoformat().replace("+00:00", "Z"),
         "items":   [{"id": CALENDAR_ID}],
     }
     result = service.freebusy().query(body=body).execute()

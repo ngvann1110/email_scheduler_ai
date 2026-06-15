@@ -1,0 +1,238 @@
+\documentclass[../DoAn.tex]{subfiles}
+\begin{document}
+
+\chapter{Nền tảng lý thuyết và Công nghệ sử dụng}
+
+Chương này trình bày các nền tảng lý thuyết và công nghệ được sử dụng trong hệ thống \textit{Email Scheduler AI} -- một ứng dụng tự động hóa lên lịch họp và hỗ trợ soạn thảo email thông qua trí tuệ nhân tạo. Với mỗi công nghệ, tác giả phân tích lý do lựa chọn so với các giải pháp thay thế, đồng thời chỉ rõ công nghệ đó giải quyết yêu cầu cụ thể nào được đặt ra ở Chương~2.
+
+% ============================================================
+\section{Mô hình ngôn ngữ lớn (Large Language Model)}
+% ============================================================
+
+\subsection{Tổng quan}
+
+Mô hình ngôn ngữ lớn (LLM) là các mô hình học sâu được huấn luyện trên kho văn bản khổng lồ, có khả năng hiểu và sinh ngôn ngữ tự nhiên \cite{brown2020gpt3}. Kiến trúc nền tảng của các LLM hiện đại là Transformer, được giới thiệu bởi Vaswani và cộng sự \cite{vaswani2017attention}, sử dụng cơ chế \textit{self-attention} để nắm bắt mối quan hệ ngữ nghĩa trong văn bản.
+
+\subsection{Ứng dụng trong đồ án}
+
+Hệ thống sử dụng LLM để giải quyết bốn yêu cầu cốt lõi từ Chương~2:
+\begin{itemize}
+    \item \textbf{Phân loại ý định email:} Phân loại email đến thành các nhãn \texttt{schedule}, \texttt{reschedule}, \texttt{inquiry}, \texttt{send\_email}, \texttt{reply\_email}, \texttt{other} -- thay thế cho cách tiếp cận dựa trên từ khóa cứng nhắc.
+    \item \textbf{Hỗ trợ soạn thảo email:} Tạo nội dung email (tiêu đề, nội dung, giọng văn phù hợp) theo yêu cầu người dùng.
+    \item \textbf{Phân tích thông minh email:} Phân loại, tóm tắt và trích xuất thông tin cấu trúc từ các email không liên quan đến lịch họp.
+    \item \textbf{Đánh giá chất lượng kết quả:} Đánh giá tự động kết quả xử lý pipeline và kích hoạt thử lại nếu cần.
+\end{itemize}
+
+\subsection{Lựa chọn công nghệ}
+
+\begin{table}[ht]
+\centering
+\caption{So sánh các LLM API phổ biến}
+\label{tab:llm-comparison}
+\begin{tabular}{|l|l|l|l|}
+\hline
+\textbf{Giải pháp} & \textbf{Điểm mạnh} & \textbf{Hạn chế} & \textbf{Phù hợp} \\
+\hline
+GPT-4o (OpenAI) & Chính xác cao, hỗ trợ JSON & Chi phí cao & ✓ Lựa chọn \\
+Gemini (Google) & Tích hợp Google & API chưa ổn định & -- \\
+Claude (Anthropic) & An toàn, ngữ nghĩa tốt & Không hỗ trợ JSON mode & -- \\
+LLaMA (Meta) & Mã nguồn mở, miễn phí & Cần hạ tầng riêng & -- \\
+\hline
+\end{tabular}
+\end{table}
+
+Hệ thống sử dụng \textbf{GPT-4o} của OpenAI \cite{openai2024gpt4o} vì ba lý do chính: (1) hỗ trợ chế độ \texttt{response\_format=\{"type": "json\_object"\}} đảm bảo đầu ra có cấu trúc; (2) tham số \texttt{temperature=0} giúp phân loại mang tính xác định, nhất quán; (3) độ chính xác cao trong xử lý văn bản tiếng Việt lẫn tiếng Anh.
+
+% ============================================================
+\section{Framework Web -- FastAPI}
+% ============================================================
+
+\subsection{Tổng quan}
+
+FastAPI là một web framework Python hiệu năng cao, xây dựng trên nền ASGI (\textit{Asynchronous Server Gateway Interface}), hỗ trợ lập trình bất đồng bộ (\texttt{async/await}) theo tiêu chuẩn OpenAPI \cite{fastapi2024docs}. FastAPI sử dụng Pydantic để kiểm tra kiểu dữ liệu tự động và tích hợp sẵn hệ thống \textit{dependency injection}.
+
+\subsection{Ứng dụng trong đồ án}
+
+FastAPI là backbone của toàn bộ tầng API, phục vụ yêu cầu từ Chương~2 về việc cung cấp hai kênh nhập liệu (email và chat). Cụ thể, framework này quản lý 16 endpoint REST, bao gồm xác thực, chat tương tác, webhook nhận email từ Gmail, và dashboard thống kê. Khả năng bất đồng bộ cho phép vòng lặp polling Gmail chạy song song với các request HTTP mà không chặn luồng xử lý.
+
+\subsection{Lựa chọn công nghệ}
+
+\begin{table}[ht]
+\centering
+\caption{So sánh các web framework Python}
+\label{tab:framework-comparison}
+\begin{tabular}{|l|l|l|l|}
+\hline
+\textbf{Framework} & \textbf{Điểm mạnh} & \textbf{Hạn chế} & \textbf{Phù hợp} \\
+\hline
+FastAPI & Async, tự sinh docs, DI & Hệ sinh thái còn mới & ✓ Lựa chọn \\
+Django REST & Chín muồi, đầy đủ & Nặng, không async-native & -- \\
+Flask & Đơn giản, linh hoạt & Không async, thiếu DI & -- \\
+\hline
+\end{tabular}
+\end{table}
+
+FastAPI được lựa chọn vì kiến trúc bất đồng bộ phù hợp tự nhiên với việc gọi song song tới Gmail API, Google Calendar API và OpenAI API -- đây là đặc thù quan trọng của hệ thống.
+
+% ============================================================
+\section{Google Gmail API và Google Calendar API}
+% ============================================================
+
+\subsection{Tổng quan}
+
+Google Gmail API v1 và Google Calendar API v3 là các RESTful API cho phép ứng dụng bên thứ ba đọc, gửi email và quản lý sự kiện lịch thông qua giao thức OAuth 2.0 \cite{google2024gmailapi,google2024calendarapi}.
+
+\subsection{Ứng dụng trong đồ án}
+
+Đây là hai dịch vụ ngoài trực tiếp phục vụ yêu cầu cốt lõi từ Chương~2:
+\begin{itemize}
+    \item \textbf{Gmail API:} Đọc hộp thư đến (polling), đánh dấu đã đọc, gửi email xác nhận/từ chối/thông báo xung đột, hỗ trợ nhận push notification qua webhook.
+    \item \textbf{Calendar API:} Tạo sự kiện, cập nhật/xóa sự kiện, kiểm tra xung đột thời gian (\texttt{freebusy}), gửi lời mời tới người tham dự.
+\end{itemize}
+
+\subsection{Lựa chọn công nghệ}
+
+\begin{table}[ht]
+\centering
+\caption{So sánh giải pháp quản lý email và lịch}
+\label{tab:email-calendar-comparison}
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Giải pháp} & \textbf{Điểm mạnh} & \textbf{Hạn chế} \\
+\hline
+Google Gmail + Calendar API & Hệ sinh thái đầy đủ, OAuth chuẩn & Phụ thuộc Google \\
+Microsoft Graph (Outlook) & Tích hợp Microsoft 365 & Phức tạp, phổ biến thấp hơn ở VN \\
+IMAP/SMTP + CalDAV & Độc lập nền tảng & Không có push notification \\
+\hline
+\end{tabular}
+\end{table}
+
+Do người dùng mục tiêu tại Việt Nam chủ yếu sử dụng tài khoản Google, và Google cung cấp push notification (Pub/Sub) giúp giảm độ trễ so với polling thuần túy, Google APIs là lựa chọn tự nhiên và phù hợp nhất \cite{google2024gmailapi}.
+
+% ============================================================
+\section{Xác thực -- OAuth 2.0 và JSON Web Token}
+% ============================================================
+
+\subsection{Tổng quan}
+
+\textbf{OAuth 2.0} là giao thức ủy quyền chuẩn công nghiệp, cho phép ứng dụng truy cập tài nguyên của người dùng mà không cần lưu trữ mật khẩu \cite{ietf2012oauth2}. \textbf{JSON Web Token (JWT)} là chuẩn mã hóa thông tin phiên người dùng dưới dạng chuỗi ký tự có chữ ký số \cite{jones2015jwt}.
+
+\subsection{Ứng dụng trong đồ án}
+
+Hệ thống áp dụng cơ chế xác thực hai lớp để đáp ứng yêu cầu bảo mật từ Chương~2: OAuth 2.0 với PKCE (\textit{Proof Key for Code Exchange}) để xác thực người dùng qua Google và lấy quyền truy cập Gmail/Calendar; JWT (HS256, thời hạn 24 giờ) để duy trì phiên làm việc trên giao diện chat, lưu trong cookie \texttt{HttpOnly} chống tấn công XSS. Ngoài ra, các link xác nhận trong email (confirm/decline/reschedule) cũng sử dụng JWT token nhúng trong URL để không yêu cầu đăng nhập từ người nhận.
+
+\subsection{Lựa chọn công nghệ}
+
+So với \textit{Session-based authentication} (lưu session phía server), JWT phù hợp hơn vì hệ thống không cần duy trì session store tập trung -- mọi thông tin cần thiết đã được mã hóa trong token. So với \textit{API Key}, OAuth 2.0 an toàn hơn vì không để lộ thông tin nhạy cảm và hỗ trợ tự động làm mới token.
+
+% ============================================================
+\section{Cơ sở dữ liệu -- SQLite}
+% ============================================================
+
+\subsection{Tổng quan}
+
+SQLite là hệ quản trị cơ sở dữ liệu quan hệ nhúng (\textit{embedded RDBMS}), không cần tiến trình server riêng, lưu toàn bộ dữ liệu trong một file duy nhất \cite{hipp2024sqlite}. SQLite là thư viện chuẩn của Python (\texttt{sqlite3}), không cần cài đặt thêm.
+
+\subsection{Ứng dụng trong đồ án}
+
+Hệ thống dùng SQLite lưu trữ năm bảng phục vụ các yêu cầu từ Chương~2: \texttt{system\_logs} (nhật ký sự kiện), \texttt{pending\_invites} và \texttt{pending\_reschedules} (theo dõi xác nhận lịch chờ), \texttt{users} (thông tin tài khoản Google), và \texttt{email\_intelligence} (kết quả phân tích email thông minh cho dashboard).
+
+\subsection{Lựa chọn công nghệ}
+
+\begin{table}[ht]
+\centering
+\caption{So sánh các giải pháp lưu trữ dữ liệu}
+\label{tab:db-comparison}
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Giải pháp} & \textbf{Phù hợp} & \textbf{Lý do không chọn} \\
+\hline
+SQLite & ✓ Lựa chọn & -- \\
+PostgreSQL & Phù hợp multi-user & Cần server riêng, phức tạp hơn \\
+MongoDB & Linh hoạt schema & Không có lợi thế rõ ràng với dữ liệu cấu trúc \\
+Redis & Cache nhanh & Không phù hợp cho dữ liệu có quan hệ \\
+\hline
+\end{tabular}
+\end{table}
+
+SQLite phù hợp với giai đoạn prototype/alpha của hệ thống, nơi khối lượng dữ liệu còn nhỏ và không yêu cầu multi-user đồng thời. Chi phí triển khai bằng không là ưu điểm lớn so với PostgreSQL.
+
+% ============================================================
+\section{Kiến trúc Agent-Based System}
+% ============================================================
+
+\subsection{Tổng quan}
+
+Kiến trúc \textit{Agent-based} tổ chức hệ thống thành các tác nhân (\textit{agent}) độc lập, mỗi agent có trách nhiệm đơn lẻ và giao tiếp thông qua một bộ điều phối trung tâm (Orchestrator) \cite{wooldridge1995intelligent}. Đây là phương pháp thiết kế phổ biến trong hệ thống AI hiện đại để đảm bảo tính mô-đun và khả năng mở rộng.
+
+\subsection{Ứng dụng trong đồ án}
+
+Hệ thống triển khai tám agent chuyên biệt: \textit{Spam Filter}, \textit{Email Agent}, \textit{Email Intelligence Agent}, \textit{Calendar Agent}, \textit{Conflict Agent}, \textit{Chat Agent}, \textit{Notification Agent}, và \textit{Evaluation Agent}. Mỗi agent giải quyết một bài toán con từ yêu cầu Chương~2 -- lọc thư rác, phân loại ý định, thao tác lịch, phát hiện xung đột, gửi thông báo và đánh giá chất lượng đầu ra. \textit{Orchestrator} định tuyến luồng xử lý dựa trên kết quả phân loại ý định, không có agent nào cần biết sự tồn tại của agent khác.
+
+\subsection{Lựa chọn công nghệ}
+
+So với kiến trúc \textit{monolithic} (một lớp xử lý duy nhất), agent-based giúp dễ kiểm thử từng thành phần độc lập -- điều này được minh chứng qua 178 test case trong hệ thống. So với \textit{microservices} (mỗi agent là một service riêng), cách tiếp cận \textit{in-process agents} đơn giản hơn, phù hợp với quy mô đồ án.
+
+% ============================================================
+\section{Giao diện người dùng -- Vanilla JavaScript SPA}
+% ============================================================
+
+\subsection{Tổng quan}
+
+\textit{Single-Page Application} (SPA) là kiến trúc frontend nơi toàn bộ giao diện được tải một lần và cập nhật động thông qua JavaScript mà không tải lại trang \cite{flanagan2020javascript}. \textit{Vanilla JavaScript} chỉ sử dụng API trình duyệt gốc mà không phụ thuộc framework bên thứ ba.
+
+\subsection{Ứng dụng trong đồ án}
+
+Giao diện chat và dashboard (\texttt{chat\_ui.html}, 1.623+ dòng) là SPA một file phục vụ trực tiếp tại endpoint \texttt{/ui}, đáp ứng yêu cầu Chương~2 về kênh tương tác trực tiếp cho người dùng xác thực. SPA hiển thị lịch sử hội thoại, thẻ hành động (action cards) xác nhận/từ chối lịch, và bảng điều khiển thống kê email.
+
+\subsection{Lựa chọn công nghệ}
+
+So với các framework như \textit{React} hay \textit{Vue.js}, Vanilla JS loại bỏ hoàn toàn bước build, giảm phụ thuộc và cho phép phục vụ toàn bộ frontend từ một file HTML duy nhất -- phù hợp với mục tiêu triển khai đơn giản của đồ án. Nhược điểm là khó bảo trì ở quy mô lớn hơn.
+
+% ============================================================
+\section{Tóm tắt}
+% ============================================================
+
+Bảng~\ref{tab:tech-summary} tổng kết các công nghệ sử dụng và bài toán tương ứng chúng giải quyết.
+
+\begin{table}[ht]
+\centering
+\caption{Tổng kết công nghệ và bài toán tương ứng}
+\label{tab:tech-summary}
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Công nghệ} & \textbf{Vai trò trong hệ thống} & \textbf{Yêu cầu (Chương~2)} \\
+\hline
+GPT-4o (OpenAI) & Phân loại ý định, soạn email, phân tích, đánh giá & YC-01, YC-02, YC-05, YC-07 \\
+FastAPI + Uvicorn & Web framework, REST API, bất đồng bộ & YC-03, YC-04 \\
+Gmail API v1 & Đọc/gửi email, webhook & YC-01, YC-06 \\
+Calendar API v3 & CRUD lịch, kiểm tra xung đột & YC-02, YC-03 \\
+OAuth 2.0 + JWT & Xác thực người dùng và phiên làm việc & YC-04 \\
+SQLite & Lưu trữ dữ liệu, nhật ký, trạng thái chờ & YC-04, YC-07 \\
+Agent-based Architecture & Tổ chức logic xử lý, mô-đun hóa & YC-01 đến YC-07 \\
+Vanilla JS SPA & Giao diện chat và dashboard & YC-03, YC-07 \\
+\hline
+\end{tabular}
+\end{table}
+
+\end{document}
+
+
+
+
+
+% \documentclass[../DoAn.tex]{subfiles}
+% \begin{document}
+
+% Chương này có độ dài không quá 10 trang. Nếu cần trình bày dài hơn, sinh viên đưa vào phần phụ lục. Chú ý đây là kiến thức đã có sẵn; SV sau khi tìm hiểu được thì phân tích và tóm tắt lại. Sinh viên không trình bày dài dòng, chi tiết. 
+
+% Với đồ án ứng dụng, sinh viên để tên chương là “Nền tảng lý thuyết và Công nghệ sử dụng”. Trong chương này, sinh viên giới thiệu về các công nghệ, nền tảng lý thuyết sử dụng trong đồ án. Sinh viên cũng có thể trình bày thêm nền tảng lý thuyết nào đó nếu cần dùng tới.
+
+% Với từng công nghệ/nền tảng/lý thuyết được trình bày, sinh viên phải phân tích rõ công nghệ/nền tảng/lý thuyết đó dùng để để giải quyết vấn đề/yêu cầu cụ thể nào ở Chương 2. Hơn nữa, với từng vấn đề/yêu cầu, sinh viên phải liệt kê danh sách các công nghệ/hướng tiếp cận tương tự có thể dùng làm lựa chọn thay thế, rồi giải thích rõ sự lựa chọn của mình.
+
+% Lưu ý: Nội dung ĐATN phải có tính chất liên kết, liền mạch, và nhất quán. Vì vậy, các công nghệ/thuật toán trình bày trong chương này phải khớp với nội dung giới thiệu của sinh viên ở phần trước đó. 
+
+% Trong chương này, để tăng tính khoa học và độ tin cậy, sinh viên nên chỉ rõ nguồn kiến thức mình thu thập được ở tài liệu nào, đồng thời đưa tài liệu đó vào trong danh sách tài liệu tham khảo rồi tạo các tham chiếu chéo (xem hướng dẫn ở phụ lục A.7).
+
+
+% \end{document}
