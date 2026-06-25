@@ -11,7 +11,7 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 from app.agents.chat_agent import chat
-from app.core.auth import get_gmail_service, get_calendar_service
+from app.core.auth import get_gmail_service
 from app.core.logger import log_event
 from app.db.sqlite import get_connection, insert_sent_email
 
@@ -146,15 +146,20 @@ Email Scheduler AI
 
 
 def _send_invite_email(action: dict, confirm_token: str):
-    to = action["invitee_email"]
-    invitee_name = action.get("invitee_name", "Anh/Chi")
+    # Collect all attendees from the action — supports comma/semicolon/"và"-separated
+    raw_attendees = list(action.get("attendees") or [])
+    primary = action.get("invitee_email", "")
+    if primary and primary not in raw_attendees:
+        raw_attendees.insert(0, primary)
+    recipients = [a for a in raw_attendees if "@" in str(a)]
+
     summary = action.get("summary", "cuoc hop")
     time_fmt = _fmt_time(action.get("time", ""))
     location = action.get("location") or "Chua xac dinh"
     confirm_url = f"http://localhost:8000/chat/confirm/{confirm_token}"
     decline_url = f"http://localhost:8000/chat/decline/{confirm_token}"
 
-    body = f"""Xin chao {invitee_name},
+    body = f"""Xin chao,
 
 Ban duoc moi tham gia cuoc hop sau:
 
@@ -174,8 +179,11 @@ Hoac reply email nay voi "Dong y" hoac "Tu choi".
 Tran trong,
 Email Scheduler AI
 """
-    _send_email(to, f"Thu moi hop: {summary}", body, triggered_by="meeting_invite")
-    logger.info("[ChatAPI] Gui email moi → %s", to)
+    subject = f"Thu moi hop: {summary}"
+    logger.info("[Scheduler] Extracted attendees: %s", recipients)
+    for to in recipients:
+        _send_email(to, subject, body, triggered_by="meeting_invite")
+        logger.info("[ChatAPI] Gui email moi → %s", to)
 
 
 def _send_cancel_notification(cal_result: dict):
@@ -306,19 +314,83 @@ Email Scheduler AI
 
 
 def _create_calendar_event(action: dict):
-    from app.agents.calendar_agent import _create_event, DEFAULT_DURATION
-    service = get_calendar_service()
+    from app.agents.calendar_agent import _create_event, _check_conflict, _get_service, DEFAULT_DURATION
+    service = _get_service()
     time_str = action.get("time", "")
     start_dt = datetime.fromisoformat(time_str)
     end_dt = start_dt + timedelta(minutes=DEFAULT_DURATION)
+
+    # Guard: re-check conflict at confirmation time
+    busy = _check_conflict(service, start_dt, end_dt)
+    if busy:
+        names = _get_conflicting_event_names(start_dt, end_dt)
+        conflict_info = ", ".join(names) if names else "sự kiện đã có"
+        raise ValueError(f"Khung giờ {start_dt.strftime('%H:%M %d/%m/%Y')} bị trùng với: {conflict_info}")
+
+    # Build full attendee list: all emails from attendees array + invitee_email
+    all_attendees = list(action.get("attendees") or [])
+    invitee_email = action.get("invitee_email", "")
+    if invitee_email and invitee_email not in all_attendees:
+        all_attendees.insert(0, invitee_email)
+    logger.info("[Scheduler] Extracted attendees: %s", all_attendees)
     event = _create_event(
         service=service, summary=action.get("summary", "Cuoc hop"),
         start_dt=start_dt, end_dt=end_dt,
         location=action.get("location"),
-        attendees=[action.get("invitee_email", "")],
+        attendees=all_attendees,
         description="Tao tu Email Scheduler AI Chat",
     )
     return event.get("htmlLink", "")
+
+
+# ── Conflict helpers ─────────────────────────────────────────────────────────
+
+def _get_conflicting_event_names(start_dt: datetime, end_dt: datetime) -> list[str]:
+    """Return names of existing events that overlap [start_dt, end_dt] (ICT naive)."""
+    try:
+        from app.agents.calendar_agent import _find_events_by_time, _get_service
+        service = _get_service()
+        events = _find_events_by_time(service, start_dt, end_dt)
+        return [e.get("summary", "Sự kiện") for e in events if e.get("summary")]
+    except Exception as exc:
+        logger.warning("[ChatAPI] Could not fetch conflicting events: %s", exc)
+        return []
+
+
+def _find_alt_slots(start_dt: datetime, n: int = 2) -> list[str]:
+    """Return n labels of free 1-hour slots starting from the hour after start_dt."""
+    from app.agents.calendar_agent import _check_conflict, _get_service
+    try:
+        service = _get_service()
+    except Exception:
+        return []
+    slots: list[str] = []
+    candidate = (start_dt + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
+    for _ in range(14):
+        if len(slots) >= n:
+            break
+        candidate_end = candidate + timedelta(hours=1)
+        try:
+            busy = _check_conflict(service, candidate, candidate_end)
+            if not busy:
+                slots.append(f"{candidate.strftime('%H:%M')}–{candidate_end.strftime('%H:%M')}")
+        except Exception:
+            pass
+        candidate += timedelta(hours=1)
+    return slots
+
+
+def _build_conflict_reply(start_dt: datetime, end_dt: datetime) -> str:
+    """Build a user-facing conflict warning with event names + alternative slots."""
+    names = _get_conflicting_event_names(start_dt, end_dt)
+    alts = _find_alt_slots(start_dt)
+    msg = "\n\n⚠️ **Khung giờ này bị trùng lịch!**"
+    if names:
+        msg += "\n\nTrùng với:\n" + "\n".join(f"• {n}" for n in names)
+    if alts:
+        msg += "\n\nGiờ trống gần nhất:\n" + "\n".join(f"• {s}" for s in alts)
+    msg += "\n\nBạn muốn chọn giờ khác không?"
+    return msg
 
 
 # ── Routes
@@ -338,14 +410,112 @@ async def chat_endpoint(req: ChatRequest):
 
     # ── Đặt lịch
     if action and action.get("type") == "schedule":
-        try:
-            token = str(uuid.uuid4())
-            _save_pending(token, action)
-            _send_invite_email(action, token)
-            reply += f"\n\n📧 Đã gửi email mời đến **{action['invitee_email']}**. Đang chờ xác nhận..."
-        except Exception as e:
-            logger.error("[ChatAPI] Loi gui email moi: %s", e)
-            reply += f"\n\n⚠️ Không thể gửi email mời: {e}"
+        event_type = action.get("event_type", "meeting")
+        attendees = action.get("attendees") or []
+        invitee_email = action.get("invitee_email", "")
+        # Merge explicit invitee_email into attendees list
+        if invitee_email and invitee_email not in attendees:
+            attendees.insert(0, invitee_email)
+            action["attendees"] = attendees
+        primary_invitee = attendees[0] if attendees else ""
+        valid_attendees = [a for a in attendees if "@" in str(a)]
+        is_invite_meeting = (event_type == "meeting" and valid_attendees)
+
+        logger.info("[Scheduler] Extracted attendees: %s", valid_attendees)
+
+        if is_invite_meeting:
+            # Meeting with known invitees — check conflict BEFORE sending invites
+            if not action.get("invitee_email"):
+                action["invitee_email"] = primary_invitee
+            if not action.get("invitee_name"):
+                action["invitee_name"] = primary_invitee.split("@")[0]
+            if not action.get("summary"):
+                action["summary"] = action.get("title", "Cuộc họp")
+            try:
+                from app.agents.calendar_agent import _check_conflict, _get_service, DEFAULT_DURATION
+                time_str = action.get("time", "")
+                start_dt = datetime.fromisoformat(time_str)
+                end_dt = start_dt + timedelta(minutes=DEFAULT_DURATION)
+                svc = _get_service()
+                busy = _check_conflict(svc, start_dt, end_dt)
+                if busy:
+                    logger.warning("[ChatAPI] Conflict detected for invite meeting: %s", busy)
+                    reply += _build_conflict_reply(start_dt, end_dt)
+                    action["sync_status"] = "conflict"
+                else:
+                    token = str(uuid.uuid4())
+                    _save_pending(token, action)
+                    _send_invite_email(action, token)
+                    all_invitees = ", ".join(f"**{a}**" for a in valid_attendees)
+                    reply += f"\n\n📧 Đã gửi email mời đến {all_invitees}. Đang chờ xác nhận..."
+            except Exception as e:
+                logger.error("[ChatAPI] Loi gui email moi: %s", e)
+                reply += f"\n\n⚠️ Không thể gửi email mời: {e}"
+        else:
+            # Personal event / study / deadline / travel / meeting without email
+            # → create directly on Google Calendar
+            try:
+                from app.agents.calendar_agent import process_schedule
+                cal_input = {
+                    **action,
+                    "summary": action.get("title") or action.get("summary", "Sự kiện"),
+                }
+                result = process_schedule(cal_input)
+                google_event_id = result.get("event_id", "")
+                calendar_link = result.get("event_link", "")
+
+                if result.get("status") == "created":
+                    try:
+                        from app.db.sqlite import insert_calendar_event
+                        insert_calendar_event(
+                            google_event_id=google_event_id,
+                            event_type=event_type,
+                            title=action.get("title") or action.get("summary", "Sự kiện"),
+                            description=action.get("description"),
+                            start_time=result.get("start"),
+                            end_time=result.get("end"),
+                            location=action.get("location"),
+                            attendees=attendees,
+                            sync_status="created",
+                            calendar_link=calendar_link,
+                        )
+                    except Exception as db_err:
+                        logger.warning("[ChatAPI] Lưu calendar_event DB thất bại: %s", db_err)
+
+                    action["google_event_id"] = google_event_id
+                    action["calendar_link"] = calendar_link
+                    action["sync_status"] = "created"
+
+                    _LABELS = {
+                        "meeting": "Cuộc họp",
+                        "study": "Lịch học",
+                        "travel": "Chuyến công tác",
+                        "personal": "Sự kiện cá nhân",
+                        "deadline": "Nhắc nhở deadline",
+                        "other": "Sự kiện",
+                    }
+                    label = _LABELS.get(event_type, "Sự kiện")
+                    title = action.get("title") or action.get("summary", "")
+                    reply += f"\n\n✅ Đã tạo **{label}**: {title} trên Google Calendar!"
+                    log_event(agent="chat", status="calendar_event_created", payload={
+                        "event_type": event_type, "title": title, "event_id": google_event_id,
+                    })
+                elif result.get("status") == "conflict":
+                    action["sync_status"] = "conflict"
+                    try:
+                        from app.agents.calendar_agent import DEFAULT_DURATION
+                        _s = datetime.fromisoformat(cal_input.get("time", ""))
+                        _e = _s + timedelta(minutes=DEFAULT_DURATION)
+                        logger.warning("[ChatAPI] Conflict for direct event: start=%s", _s)
+                        reply += _build_conflict_reply(_s, _e)
+                    except Exception:
+                        reply += "\n\n⚠️ Khung giờ đó đã bận! Bạn muốn chọn giờ khác không?"
+                else:
+                    action["sync_status"] = "failed"
+                    reply += f"\n\n❌ Không thể tạo sự kiện: {result.get('message', '')}"
+            except Exception as e:
+                logger.error("[ChatAPI] Loi tao su kien truc tiep: %s", e)
+                reply += f"\n\n⚠️ Lỗi tạo sự kiện: {e}"
 
     # ── Huỷ lịch
     elif action and action.get("type") == "cancel":
@@ -434,6 +604,16 @@ async def confirm_invite(token: str):
                   background:#16a34a;color:white;border-radius:8px;text-decoration:none">
            Xem lich tren Google Calendar
         </a></body></html>""")
+    except ValueError as conflict_err:
+        # Conflict detected at confirmation time — do not create, keep pending
+        conn.close()
+        logger.warning("[ChatAPI] Conflict at confirm_invite: %s", conflict_err)
+        return HTMLResponse(f"""
+        <html><body style="font-family:sans-serif;text-align:center;padding:60px;background:#fff7ed">
+        <h1 style="color:#ea580c">&#9888; Trung lich!</h1>
+        <p>{conflict_err}</p>
+        <p style="margin-top:16px;color:#6b7280">Vui long lien he nguoi to chuc de chon gio khac.</p>
+        </body></html>""")
     except Exception as e:
         conn.close()
         return HTMLResponse(f"<h2>Loi tao lich: {e}</h2>")

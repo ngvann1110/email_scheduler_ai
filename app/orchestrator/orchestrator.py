@@ -1,7 +1,7 @@
 import json
 import logging
 
-from app.agents.email_agent import process_email
+from app.agents.email_agent import process_email, priority_scoring_skill
 from app.agents.calendar_agent import (
     check_calendar_availability,
     check_reschedule_availability,
@@ -49,10 +49,10 @@ def _build_reschedule_recommendation(calendar_result: dict) -> str:
     return "Kiểm tra dời lịch thất bại — xem lại thủ công"
 
 
-def _store_email_insight(email, email_result: dict):
+def _store_email_insight(email, email_result: dict) -> int | None:
     """
     Store every incoming email as an email_insight record with AI enrichment.
-    The dashboard behaves like an AI-enhanced inbox, not a filtered notification list.
+    Returns the new row id on success, or None on failure.
     """
     gmail_message_id = email_result.get(
         "gmail_message_id") or getattr(email, "gmail_message_id", None)
@@ -66,14 +66,21 @@ def _store_email_insight(email, email_result: dict):
             priority=email_result.get("priority", "Low"),
             action_required=email_result.get("action_required", False),
             important_note=email_result.get("important_note"),
+            body=getattr(email, "body", None),
+            thread_id=getattr(email, "thread_id", None),
+            sentiment=email_result.get("sentiment"),
+            detected_language=email_result.get("detected_language"),
+            priority_score=priority_scoring_skill(email_result),
         )
         logger.info("[Orchestrator] Stored email_insight row_id=%d | sender=%s",
                     row_id, getattr(email, "sender", ""))
+        return row_id
     except Exception as db_err:
         logger.error(
             "[Orchestrator] Failed to store email_insight: %s: %s | sender=%s",
             type(db_err).__name__, db_err, getattr(email, "sender", ""),
         )
+        return None
 
 
 async def run_pipeline(email) -> dict:
@@ -91,13 +98,14 @@ async def run_pipeline(email) -> dict:
         "intent", "unknown"), payload=email_result)
 
     # ── Store every email in email_insights (AI-enhanced inbox) ────────────
-    _store_email_insight(email, email_result)
+    insight_id = _store_email_insight(email, email_result)
 
     intent      = email_result.get("intent", "other")
     confidence  = float(email_result.get("confidence") or 0.0)
     sender      = getattr(email, "sender", "")
     subject     = getattr(email, "subject", "")
     gmail_id    = getattr(email, "gmail_message_id", None)
+    thread_id   = getattr(email, "thread_id", None)
 
     # ── Low-confidence gate ─────────────────────────────────────────────────
     if confidence < LOW_CONFIDENCE_THRESHOLD:
@@ -107,8 +115,10 @@ async def run_pipeline(email) -> dict:
             subject=subject,
             summary=email_result.get("summary"),
             confidence=confidence,
-            options=["ignore"],
+            options={"available": ["ignore"]},
             gmail_message_id=gmail_id,
+            email_insight_id=insight_id,
+            thread_id=thread_id,
         )
         log_event(agent="orchestrator", status="low_confidence_pending",
                   payload={"confidence": confidence, "action_id": action_id})
@@ -129,9 +139,11 @@ async def run_pipeline(email) -> dict:
             summary=email_result.get("summary"),
             recommendation=recommendation,
             confidence=confidence,
-            options=["accept", "reject", "suggest_new_time"],
+            options={"available": ["accept", "reject", "suggest_new_time"]},
             calendar_result=calendar_result,
             gmail_message_id=gmail_id,
+            email_insight_id=insight_id,
+            thread_id=thread_id,
         )
         log_event(agent="orchestrator", status="schedule_pending", payload={
             "calendar_status": calendar_result.get("status"),
@@ -142,20 +154,6 @@ async def run_pipeline(email) -> dict:
         return {"type": "schedule_flow", "data": {
             "email": email_result, "calendar": calendar_result, "action_id": action_id,
         }}
-
-    elif intent == "send_email":
-        logger.info(
-            "[Orchestrator] send_email intent – email log only | sender=%s", sender)
-        log_event(agent="orchestrator",
-                  status="send_email_logged", payload=email_result)
-        return {"type": "send_email_flow", "data": {"email": email_result}}
-
-    elif intent == "reply_email":
-        logger.info(
-            "[Orchestrator] reply_email intent – email log only | sender=%s", sender)
-        log_event(agent="orchestrator",
-                  status="reply_email_logged", payload=email_result)
-        return {"type": "reply_email_flow", "data": {"email": email_result}}
 
     elif intent == "reschedule":
         calendar_result = check_reschedule_availability(email_result)
@@ -170,9 +168,11 @@ async def run_pipeline(email) -> dict:
             summary=email_result.get("summary"),
             recommendation=recommendation,
             confidence=confidence,
-            options=["accept", "reject", "suggest_new_time"],
+            options={"available": ["accept", "reject", "suggest_new_time"]},
             calendar_result=calendar_result,
             gmail_message_id=gmail_id,
+            email_insight_id=insight_id,
+            thread_id=thread_id,
         )
         log_event(agent="orchestrator", status="reschedule_pending", payload={
             "calendar_status": calendar_result.get("status"),
@@ -184,12 +184,40 @@ async def run_pipeline(email) -> dict:
             "email": email_result, "calendar": calendar_result, "action_id": action_id,
         }}
 
-    elif intent == "inquiry":
-        logger.info(
-            "[Orchestrator] inquiry intent – logged, no auto-reply | sender=%s", sender)
-        log_event(agent="orchestrator",
-                  status="inquiry_logged", payload=email_result)
-        return {"type": "inquiry_flow", "data": {"email": email_result}}
+    elif intent == "cancel":
+        action_id = create_pending_action(
+            action_type="meeting_cancel",
+            sender=sender,
+            subject=subject,
+            summary=email_result.get("summary"),
+            confidence=confidence,
+            options={"available": ["accept", "reject"]},
+            gmail_message_id=gmail_id,
+            email_insight_id=insight_id,
+            thread_id=thread_id,
+        )
+        log_event(agent="orchestrator", status="cancel_pending",
+                  payload={"action_id": action_id})
+        logger.info("[Orchestrator] meeting_cancel pending_action id=%d", action_id)
+        return {"type": "cancel_flow", "data": {"email": email_result, "action_id": action_id}}
+
+    elif intent in ("send_email", "reply_email", "inquiry"):
+        action_id = create_pending_action(
+            action_type="reply_required",
+            sender=sender,
+            subject=subject,
+            summary=email_result.get("summary"),
+            confidence=confidence,
+            options={"available": ["generate_reply"]},
+            gmail_message_id=gmail_id,
+            email_insight_id=insight_id,
+            thread_id=thread_id,
+        )
+        log_event(agent="orchestrator", status="reply_required_pending",
+                  payload={"intent": intent, "action_id": action_id})
+        logger.info("[Orchestrator] reply_required pending_action id=%d | intent=%s",
+                    action_id, intent)
+        return {"type": "reply_required_flow", "data": {"email": email_result, "action_id": action_id}}
 
     else:
         # "other" intent — email không liên quan lịch họp

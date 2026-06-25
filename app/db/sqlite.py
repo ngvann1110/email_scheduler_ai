@@ -158,7 +158,7 @@ def init_db():
     )
     """)
 
-    # Migration: add is_read column if it doesn't exist
+    # Migration: add columns to email_insights if they don't exist
     cur.execute("PRAGMA table_info(email_insights)")
     insight_cols = [row[1] for row in cur.fetchall()]
     if "is_read" not in insight_cols:
@@ -171,6 +171,16 @@ def init_db():
     if "ai_recommendation" not in insight_cols:
         cur.execute(
             "ALTER TABLE email_insights ADD COLUMN ai_recommendation TEXT")
+    if "body" not in insight_cols:
+        cur.execute("ALTER TABLE email_insights ADD COLUMN body TEXT")
+    if "thread_id" not in insight_cols:
+        cur.execute("ALTER TABLE email_insights ADD COLUMN thread_id TEXT")
+    if "sentiment" not in insight_cols:
+        cur.execute("ALTER TABLE email_insights ADD COLUMN sentiment TEXT")
+    if "detected_language" not in insight_cols:
+        cur.execute("ALTER TABLE email_insights ADD COLUMN detected_language TEXT")
+    if "priority_score" not in insight_cols:
+        cur.execute("ALTER TABLE email_insights ADD COLUMN priority_score INTEGER")
 
     cur.execute("""
     CREATE TABLE IF NOT EXISTS sent_emails (
@@ -195,11 +205,36 @@ def init_db():
         recommendation   TEXT,
         confidence       REAL,
         draft_response   TEXT,
-        options          TEXT DEFAULT '[]',
+        options          TEXT DEFAULT '{}',
         calendar_result  TEXT,
         status           TEXT DEFAULT 'pending',
         created_at       DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at       DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+    """)
+
+    # Migration: add thread_id to pending_actions if missing
+    cur.execute("PRAGMA table_info(pending_actions)")
+    pa_cols = [row[1] for row in cur.fetchall()]
+    if "thread_id" not in pa_cols:
+        cur.execute("ALTER TABLE pending_actions ADD COLUMN thread_id TEXT")
+
+    # ── Calendar Events table (direct chat-created events) ────────────────────
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS calendar_events (
+        id                INTEGER PRIMARY KEY AUTOINCREMENT,
+        google_event_id   TEXT,
+        calendar_provider TEXT DEFAULT 'google',
+        event_type        TEXT NOT NULL DEFAULT 'other',
+        title             TEXT,
+        description       TEXT,
+        start_time        TEXT,
+        end_time          TEXT,
+        location          TEXT,
+        attendees         TEXT DEFAULT '[]',
+        sync_status       TEXT DEFAULT 'created',
+        calendar_link     TEXT,
+        created_at        DATETIME DEFAULT CURRENT_TIMESTAMP
     )
     """)
 
@@ -261,6 +296,23 @@ def init_db():
             status           TEXT DEFAULT 'pending',
             created_at       DATETIME DEFAULT CURRENT_TIMESTAMP,
             updated_at       DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    _require_table("calendar_events", """
+        CREATE TABLE calendar_events (
+            id                INTEGER PRIMARY KEY AUTOINCREMENT,
+            google_event_id   TEXT,
+            calendar_provider TEXT DEFAULT 'google',
+            event_type        TEXT NOT NULL DEFAULT 'other',
+            title             TEXT,
+            description       TEXT,
+            start_time        TEXT,
+            end_time          TEXT,
+            location          TEXT,
+            attendees         TEXT DEFAULT '[]',
+            sync_status       TEXT DEFAULT 'created',
+            calendar_link     TEXT,
+            created_at        DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     """)
 
@@ -392,6 +444,11 @@ def insert_email_insight(
     priority: str | None = None,
     action_required: bool = False,
     important_note: str | None = None,
+    body: str | None = None,
+    thread_id: str | None = None,
+    sentiment: str | None = None,
+    detected_language: str | None = None,
+    priority_score: int | None = None,
 ) -> int:
     """
     Insert one email_insight record.
@@ -403,8 +460,9 @@ def insert_email_insight(
     cur.execute(
         "INSERT INTO email_insights "
         "(gmail_message_id, sender, subject, category, summary, priority, "
-        "action_required, important_note) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        "action_required, important_note, body, thread_id, "
+        "sentiment, detected_language, priority_score) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             gmail_message_id,
             sender,
@@ -414,6 +472,11 @@ def insert_email_insight(
             priority,
             1 if action_required else 0,
             important_note,
+            body,
+            thread_id,
+            sentiment,
+            detected_language,
+            priority_score,
         ),
     )
     new_id = cur.lastrowid
@@ -440,6 +503,21 @@ def get_email_insight(insight_id: int) -> dict | None:
     if row is None:
         return None
     return _insight_row_to_dict(row)
+
+
+def get_email_insight_language(insight_id: int) -> dict:
+    """Return detected_language and sentiment for a single email_insight row."""
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT detected_language, sentiment FROM email_insights WHERE id = ?",
+        (insight_id,),
+    )
+    row = cur.fetchone()
+    conn.close()
+    if row is None:
+        return {"detected_language": None, "sentiment": None}
+    return {"detected_language": row[0], "sentiment": row[1]}
 
 
 def get_email_insights(
@@ -540,7 +618,7 @@ def get_insights_by_message_id(gmail_message_id: str) -> dict | None:
     cur.execute(
         "SELECT id, gmail_message_id, sender, subject, summary, category, "
         "priority, action_required, important_note, is_read, created_at, "
-        "confidence, ai_recommendation "
+        "confidence, ai_recommendation, body, thread_id "
         "FROM email_insights WHERE gmail_message_id = ? "
         "ORDER BY created_at DESC LIMIT 1",
         (gmail_message_id,),
@@ -555,19 +633,21 @@ def get_insights_by_message_id(gmail_message_id: str) -> dict | None:
 def _insight_row_to_dict(row) -> dict:
     """Convert a raw email_insights db row (tuple) to a dict."""
     return {
-        "id": row[0],
+        "id":               row[0],
         "gmail_message_id": row[1],
-        "sender": row[2],
-        "subject": row[3],
-        "summary": row[4],
-        "category": row[5],
-        "priority": row[6],
-        "action_required": bool(row[7]),
-        "important_note": row[8],
-        "is_read": bool(row[9]),
-        "created_at": row[10],
-        "confidence": row[11],
+        "sender":           row[2],
+        "subject":          row[3],
+        "summary":          row[4],
+        "category":         row[5],
+        "priority":         row[6],
+        "action_required":  bool(row[7]),
+        "important_note":   row[8],
+        "is_read":          bool(row[9]),
+        "created_at":       row[10],
+        "confidence":       row[11],
         "ai_recommendation": row[12],
+        "body":             row[13] if len(row) > 13 else None,
+        "thread_id":        row[14] if len(row) > 14 else None,
     }
 
 
@@ -858,6 +938,14 @@ _PENDING_ACTION_UPDATABLE_FIELDS = frozenset({
 
 
 def _pending_action_row_to_dict(row) -> dict:
+    raw_options = json.loads(row[10]) if row[10] else {}
+    # Normalise: old rows stored options as a list of capability strings.
+    # New rows store a dict with {"available": [...], "step": ..., "event_id": ...}.
+    if isinstance(raw_options, list):
+        options = {"available": raw_options}
+    else:
+        options = raw_options if raw_options else {"available": []}
+
     return {
         "id":               row[0],
         "gmail_message_id": row[1],
@@ -869,11 +957,12 @@ def _pending_action_row_to_dict(row) -> dict:
         "recommendation":   row[7],
         "confidence":       row[8],
         "draft_response":   row[9],
-        "options":          json.loads(row[10]) if row[10] else [],
+        "options":          options,
         "calendar_result":  json.loads(row[11]) if row[11] else None,
         "status":           row[12],
         "created_at":       row[13],
         "updated_at":       row[14],
+        "thread_id":        row[15] if len(row) > 15 else None,
     }
 
 
@@ -885,19 +974,22 @@ def create_pending_action(
     recommendation: str | None = None,
     confidence: float | None = None,
     draft_response: str | None = None,
-    options: list | None = None,
+    options: list | dict | None = None,
     calendar_result: dict | None = None,
     gmail_message_id: str | None = None,
     email_insight_id: int | None = None,
+    thread_id: str | None = None,
 ) -> int:
     """Insert a new pending_action and return its id."""
     conn = get_connection()
     cur = conn.cursor()
+    opts = options if options is not None else {}
     cur.execute(
         "INSERT INTO pending_actions "
         "(gmail_message_id, email_insight_id, action_type, sender, subject, "
-        "summary, recommendation, confidence, draft_response, options, calendar_result) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "summary, recommendation, confidence, draft_response, options, "
+        "calendar_result, thread_id) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             gmail_message_id,
             email_insight_id,
@@ -908,8 +1000,9 @@ def create_pending_action(
             recommendation,
             confidence,
             draft_response,
-            json.dumps(options or []),
+            json.dumps(opts),
             json.dumps(calendar_result) if calendar_result is not None else None,
+            thread_id,
         ),
     )
     new_id = cur.lastrowid
@@ -925,7 +1018,7 @@ def get_pending_action(action_id: int) -> dict | None:
     cur.execute(
         "SELECT id, gmail_message_id, email_insight_id, action_type, sender, "
         "subject, summary, recommendation, confidence, draft_response, options, "
-        "calendar_result, status, created_at, updated_at "
+        "calendar_result, status, created_at, updated_at, thread_id "
         "FROM pending_actions WHERE id = ?",
         (action_id,),
     )
@@ -941,7 +1034,7 @@ def get_pending_action_by_message_id(gmail_message_id: str) -> dict | None:
     cur.execute(
         "SELECT id, gmail_message_id, email_insight_id, action_type, sender, "
         "subject, summary, recommendation, confidence, draft_response, options, "
-        "calendar_result, status, created_at, updated_at "
+        "calendar_result, status, created_at, updated_at, thread_id "
         "FROM pending_actions "
         "WHERE gmail_message_id = ? "
         "AND status NOT IN ('completed', 'cancelled') "
@@ -1060,6 +1153,77 @@ def update_pending_action_fields(action_id: int, **fields) -> bool:
     conn.commit()
     conn.close()
     return updated
+
+
+def claim_action_status(
+    action_id: int,
+    from_statuses: str | list[str],
+    to_status: str,
+) -> bool:
+    """
+    Atomically transition a pending_action status only if it is currently one
+    of from_statuses.  Returns True if the row was updated (i.e., the claim
+    succeeded), False if someone else already changed the status (race
+    condition detected).  Use this before doing any external work (calendar
+    API, Gmail send) so that two concurrent requests cannot both proceed.
+    """
+    if isinstance(from_statuses, str):
+        from_statuses = [from_statuses]
+    placeholders = ",".join("?" for _ in from_statuses)
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(
+        f"UPDATE pending_actions SET status = ?, updated_at = datetime('now') "
+        f"WHERE id = ? AND status IN ({placeholders})",
+        [to_status, action_id] + list(from_statuses),
+    )
+    changed = cur.rowcount > 0
+    conn.commit()
+    conn.close()
+    return changed
+
+
+# ── Calendar Events CRUD ─────────────────────────────────────────────────────
+
+def insert_calendar_event(
+    event_type: str,
+    title: str | None = None,
+    description: str | None = None,
+    start_time: str | None = None,
+    end_time: str | None = None,
+    location: str | None = None,
+    attendees: list | None = None,
+    google_event_id: str | None = None,
+    calendar_provider: str = "google",
+    sync_status: str = "created",
+    calendar_link: str | None = None,
+) -> int:
+    """Insert one calendar_event record and return its id."""
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO calendar_events "
+        "(google_event_id, calendar_provider, event_type, title, description, "
+        "start_time, end_time, location, attendees, sync_status, calendar_link) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            google_event_id,
+            calendar_provider,
+            event_type,
+            title,
+            description,
+            start_time,
+            end_time,
+            location,
+            json.dumps(attendees or [], ensure_ascii=False),
+            sync_status,
+            calendar_link,
+        ),
+    )
+    new_id = cur.lastrowid
+    conn.commit()
+    conn.close()
+    return new_id
 
 
 # ── User helpers ─────────────────────────────────────────────────────────────

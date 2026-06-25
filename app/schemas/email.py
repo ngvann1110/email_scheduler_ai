@@ -10,6 +10,7 @@ class EmailSchema(BaseModel):
     body: StrictStr
     timestamp: StrictStr
     gmail_message_id: str | None = None
+    thread_id: str | None = None
 
     @field_validator("timestamp")
     @classmethod

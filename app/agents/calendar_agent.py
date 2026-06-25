@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from googleapiclient.errors import HttpError
 
@@ -12,6 +12,8 @@ _get_service = get_calendar_service  # alias for test patching
 DEFAULT_DURATION = 60
 CALENDAR_ID = "primary"
 ICT = timezone(timedelta(hours=7))
+WORKING_HOURS_START = 8
+WORKING_HOURS_END = 18
 
 
 # ── Helpers
@@ -216,9 +218,10 @@ def check_reschedule_availability(email_result: dict) -> dict:
 def process_schedule(email_result: dict) -> dict:
     """Tạo lịch mới trên Google Calendar."""
     time_str = email_result.get("time")
-    summary = email_result.get("summary", "Cuộc họp")
+    summary = email_result.get("title") or email_result.get("summary", "Sự kiện")
     location = email_result.get("location")
     attendees = email_result.get("attendees", [])
+    event_type = email_result.get("event_type", "other")
 
     if not time_str:
         return {"status": "error", "message": "Email không có thông tin thời gian cụ thể"}
@@ -255,6 +258,7 @@ def process_schedule(email_result: dict) -> dict:
             "message":    f"Đã tạo lịch thành công lúc {start_dt.strftime('%H:%M %d/%m/%Y')}",
             "event_id":   event.get("id"),
             "event_link": event_link,
+            "event_type": event_type,
             "start":      start_dt.isoformat(),
             "end":        end_dt.isoformat(),
             "location":   location,
@@ -268,6 +272,221 @@ def process_schedule(email_result: dict) -> dict:
         return {"status": "error", "message": str(e)}
 
 
+# ── Skills ────────────────────────────────────────────────────────────────────
+
+def schedule_risk_skill(events: list) -> dict:
+    """
+    Analyse a list of calendar events for scheduling risks. Rule-based, no LLM.
+
+    Args:
+        events: list of event dicts with {summary, start: {dateTime}, end: {dateTime}}
+
+    Returns:
+        {"risks": [{"type", "description", "severity"}], "risk_count": int, "generated_at": str}
+    """
+    def _parse_event_dt(ev: dict, key: str) -> datetime | None:
+        raw = ev.get(key, {})
+        dt_str = raw.get("dateTime") or raw.get("date")
+        if not dt_str:
+            return None
+        try:
+            return datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+
+    def _count_events_on_date(sorted_evs: list, target_date: date) -> int:
+        return sum(
+            1 for ev in sorted_evs
+            if _parse_event_dt(ev, "start") and
+            _parse_event_dt(ev, "start").astimezone(ICT).date() == target_date
+        )
+
+    sorted_events = sorted(
+        [ev for ev in events if _parse_event_dt(ev, "start")],
+        key=lambda e: _parse_event_dt(e, "start"),
+    )
+
+    risks = []
+    seen_overloaded_dates: set = set()
+
+    for i, ev in enumerate(sorted_events):
+        ev_start = _parse_event_dt(ev, "start")
+        ev_name = ev.get("summary", "Cuộc họp")
+        ev_local = ev_start.astimezone(ICT)
+
+        # Back-to-back: gap < 15 min with the previous event
+        if i > 0:
+            prev_end = _parse_event_dt(sorted_events[i - 1], "end")
+            if prev_end:
+                gap_minutes = (ev_start - prev_end).total_seconds() / 60
+                if 0 <= gap_minutes < 15:
+                    risks.append({
+                        "type": "back_to_back",
+                        "description": (
+                            f"'{sorted_events[i-1].get('summary', 'Cuộc họp')}' → '{ev_name}': "
+                            f"chỉ {int(gap_minutes)} phút giữa 2 cuộc họp"
+                        ),
+                        "severity": "warning",
+                    })
+
+        # Outside working hours
+        if ev_local.hour < WORKING_HOURS_START or ev_local.hour >= WORKING_HOURS_END:
+            risks.append({
+                "type": "outside_hours",
+                "description": (
+                    f"'{ev_name}' bắt đầu lúc {ev_local.strftime('%H:%M')} "
+                    f"(ngoài giờ làm việc {WORKING_HOURS_START:02d}:00–{WORKING_HOURS_END:02d}:00)"
+                ),
+                "severity": "info",
+            })
+
+        # Overloaded day: > 5 events
+        ev_date = ev_local.date()
+        if ev_date not in seen_overloaded_dates:
+            day_count = _count_events_on_date(sorted_events, ev_date)
+            if day_count > 5:
+                seen_overloaded_dates.add(ev_date)
+                risks.append({
+                    "type": "overloaded_day",
+                    "description": (
+                        f"{ev_date.strftime('%d/%m/%Y')} có {day_count} cuộc họp "
+                        f"(quá tải lịch trình)"
+                    ),
+                    "severity": "warning",
+                })
+
+    return {
+        "risks": risks,
+        "risk_count": len(risks),
+        "generated_at": datetime.now(ICT).isoformat(),
+    }
+
+
+def availability_intelligence_skill(days_ahead: int = 3) -> dict:
+    """
+    Compute a free/busy summary for the next `days_ahead` working days.
+
+    Uses the Google Calendar freebusy API (one call per day). Skips weekends
+    and past time slots. Returns free windows as contiguous blocks.
+
+    Returns:
+        {
+          "summary": {"total_slots", "busy_slots", "free_slots", "busy_percentage"},
+          "free_windows": [{"date", "windows": [{"start", "end", "duration_minutes"}]}],
+          "generated_at": str
+        }
+    """
+    now = datetime.now(ICT)
+    today = now.date()
+    SLOT_MINUTES = 30
+
+    try:
+        service = _get_service()
+    except Exception as exc:
+        logger.error("[CalendarAgent] availability_intelligence_skill: service error: %s", exc)
+        return {
+            "error": str(exc),
+            "summary": {"total_slots": 0, "busy_slots": 0, "free_slots": 0, "busy_percentage": 0},
+            "free_windows": [],
+            "generated_at": now.isoformat(),
+        }
+
+    total_slots = 0
+    busy_slots = 0
+    free_windows = []
+
+    days_checked = 0
+    offset = 0
+
+    while days_checked < days_ahead:
+        check_date = today + timedelta(days=offset)
+        offset += 1
+        if check_date.weekday() >= 5:  # skip weekends
+            continue
+        days_checked += 1
+
+        # Fetch busy intervals for the full working-hours window in one API call
+        day_start = datetime(check_date.year, check_date.month, check_date.day,
+                             WORKING_HOURS_START, 0, tzinfo=ICT)
+        day_end = datetime(check_date.year, check_date.month, check_date.day,
+                           WORKING_HOURS_END, 0, tzinfo=ICT)
+        start_utc = day_start.astimezone(timezone.utc)
+        end_utc = day_end.astimezone(timezone.utc)
+
+        try:
+            body = {
+                "timeMin": start_utc.isoformat().replace("+00:00", "Z"),
+                "timeMax": end_utc.isoformat().replace("+00:00", "Z"),
+                "items": [{"id": CALENDAR_ID}],
+            }
+            result = service.freebusy().query(body=body).execute()
+            busy_intervals = result.get("calendars", {}).get(CALENDAR_ID, {}).get("busy", [])
+        except Exception as exc:
+            logger.warning("[CalendarAgent] freebusy error for %s: %s", check_date, exc)
+            busy_intervals = []
+
+        # Walk 30-min slots and classify each as free or busy
+        slot_dt = day_start
+        day_free_windows = []
+        window_start = None
+
+        while slot_dt < day_end:
+            slot_end = slot_dt + timedelta(minutes=SLOT_MINUTES)
+            total_slots += 1
+
+            # Past slots count as busy
+            is_past = slot_end <= now
+            if is_past:
+                is_busy = True
+            else:
+                slot_start_utc = slot_dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+                slot_end_utc = slot_end.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+                is_busy = any(
+                    b["start"] < slot_end_utc and b["end"] > slot_start_utc
+                    for b in busy_intervals
+                )
+
+            if is_busy:
+                busy_slots += 1
+                if window_start is not None:
+                    day_free_windows.append({
+                        "start": window_start.strftime("%H:%M"),
+                        "end": slot_dt.strftime("%H:%M"),
+                        "duration_minutes": int((slot_dt - window_start).total_seconds() / 60),
+                    })
+                    window_start = None
+            else:
+                if window_start is None:
+                    window_start = slot_dt
+
+            slot_dt = slot_end
+
+        if window_start is not None:
+            day_free_windows.append({
+                "start": window_start.strftime("%H:%M"),
+                "end": f"{WORKING_HOURS_END:02d}:00",
+                "duration_minutes": int((day_end - window_start).total_seconds() / 60),
+            })
+
+        if day_free_windows:
+            free_windows.append({"date": check_date.isoformat(), "windows": day_free_windows})
+
+    free_slot_count = total_slots - busy_slots
+    busy_pct = round(busy_slots / total_slots * 100) if total_slots > 0 else 0
+
+    return {
+        "summary": {
+            "total_slots": total_slots,
+            "busy_slots": busy_slots,
+            "free_slots": free_slot_count,
+            "busy_percentage": busy_pct,
+        },
+        "free_windows": free_windows,
+        "generated_at": now.isoformat(),
+    }
+
+
+# ── Public API
 def process_reschedule(email_result: dict) -> dict:
     """
     Tìm event cũ theo old_time và dời sang new_time.

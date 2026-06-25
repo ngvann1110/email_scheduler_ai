@@ -18,7 +18,7 @@ Chỉ trả về JSON thuần, KHÔNG markdown, KHÔNG giải thích thêm.
 
 Schema:
 {
-   "intent": "<schedule | reschedule | inquiry | send_email | reply_email | other>",
+   "intent": "<schedule | reschedule | cancel | inquiry | send_email | reply_email | other>",
    "category": "<Meeting | Work | Personal | Finance | Job Opportunity | Promotion | Spam | Other>",
    "priority": "<High | Medium | Low>",
    "summary": "<tóm tắt ngắn gọn 1-2 câu, dễ đọc>",
@@ -29,16 +29,19 @@ Schema:
    "location": "<địa điểm hoặc null>",
    "attendees": ["<email hoặc tên>"],
    "confidence": <0.0 - 1.0>,
-   "raw_time_text": "<chuỗi thời gian gốc trong email hoặc null>"
+   "raw_time_text": "<chuỗi thời gian gốc trong email hoặc null>",
+   "detected_language": "<vi | en | ja | ko | other>",
+   "sentiment": "<positive | neutral | negative | urgent>"
 }
 
 ─────────────────────────────────────────────────────
 Quy tắc intent (giữ nguyên để routing):
 - schedule   : muốn đặt / tạo lịch mới
+- reschedule : muốn dời lịch sang giờ khác
+- cancel     : muốn huỷ / xoá lịch đã đặt
 - send_email  : muốn soạn / gửi email mới
 - reply_email : muốn trả lời email
-- reschedule : muốn dời lịch sang giờ khác
-- inquiry    : hỏi về lịch, không đặt mới
+- inquiry    : hỏi về lịch hoặc yêu cầu xác nhận, không đặt mới
 - other      : không liên quan lịch họp
 
 ─────────────────────────────────────────────────────
@@ -88,6 +91,21 @@ Quy tắc old_time (chỉ cho reschedule):
 - Là giờ CŨ của lịch muốn dời, trích từ email
 - VD: "dời lịch 14h thứ Hai sang 10h thứ Tư" → old_time="2026-04-27T14:00:00", time="2026-04-29T10:00:00"
 - Nếu không phải reschedule → null
+
+─────────────────────────────────────────────────────
+Quy tắc detected_language:
+- vi    : email viết bằng tiếng Việt
+- en    : email viết bằng tiếng Anh
+- ja    : email viết bằng tiếng Nhật
+- ko    : email viết bằng tiếng Hàn
+- other : ngôn ngữ khác
+
+─────────────────────────────────────────────────────
+Quy tắc sentiment:
+- positive : nội dung tích cực, cảm ơn, xác nhận, đồng ý
+- neutral  : thông tin trung lập, không có cảm xúc đặc biệt
+- negative : từ chối, phàn nàn, bày tỏ lo ngại, thất vọng
+- urgent   : khẩn cấp, cần phản hồi ngay, deadline gần, yêu cầu gấp
 """
 
 # ── Valid values for validation ──────────────────────────────────────────────
@@ -97,9 +115,13 @@ VALID_CATEGORIES = {
 }
 VALID_PRIORITIES = {"High", "Medium", "Low"}
 VALID_INTENTS = {
-    "schedule", "reschedule", "inquiry",
+    "schedule", "reschedule", "cancel", "inquiry",
     "send_email", "reply_email", "other",
 }
+VALID_LANGUAGES = {"vi", "en", "ja", "ko", "other"}
+VALID_SENTIMENTS = {"positive", "neutral", "negative", "urgent"}
+
+_PRIORITY_SCORE_CATEGORY_BONUS = {"Meeting", "Work", "Finance"}
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -159,6 +181,14 @@ def _validate_and_normalise(result: dict) -> dict:
         confidence = 0.5
     confidence = round(max(0.0, min(1.0, confidence)), 2)
 
+    detected_language = result.get("detected_language", "other")
+    if detected_language not in VALID_LANGUAGES:
+        detected_language = "other"
+
+    sentiment = result.get("sentiment", "neutral")
+    if sentiment not in VALID_SENTIMENTS:
+        sentiment = "neutral"
+
     return {
         "intent": intent,
         "category": category,
@@ -172,6 +202,8 @@ def _validate_and_normalise(result: dict) -> dict:
         "attendees": result.get("attendees", []) or [],
         "confidence": confidence,
         "raw_time_text": result.get("raw_time_text", None),
+        "detected_language": detected_language,
+        "sentiment": sentiment,
     }
 
 
@@ -192,6 +224,46 @@ def _fallback(reason: str) -> dict:
         "raw_time_text": None,
         "error": reason,
     }
+
+
+# ── Skills ───────────────────────────────────────────────────────────────────
+
+def language_detection_skill(email_result: dict) -> dict:
+    """Extract detected language from an email_result (zero-cost: set by process_email LLM call)."""
+    return {
+        "detected_language": email_result.get("detected_language", "other"),
+        "confidence": email_result.get("confidence", 0.5),
+    }
+
+
+def sentiment_analysis_skill(email_result: dict) -> dict:
+    """Extract sentiment from an email_result (zero-cost: set by process_email LLM call)."""
+    return {
+        "sentiment": email_result.get("sentiment", "neutral"),
+        "action_required": email_result.get("action_required", False),
+    }
+
+
+def priority_scoring_skill(email_result: dict) -> int:
+    """
+    Compute a numeric priority score [0–100] deterministically from email_result fields.
+
+    Base: High=70, Medium=40, Low=15
+    +20 if action_required
+    +10 if sentiment == "urgent"
+    +5  if category in {Meeting, Work, Finance}
+    """
+    base = {"High": 70, "Medium": 40, "Low": 15}.get(
+        email_result.get("priority", "Low"), 15
+    )
+    score = base
+    if email_result.get("action_required"):
+        score += 20
+    if email_result.get("sentiment") == "urgent":
+        score += 10
+    if email_result.get("category") in _PRIORITY_SCORE_CATEGORY_BONUS:
+        score += 5
+    return min(100, score)
 
 
 # ── Public API ───────────────────────────────────────────────────────────────

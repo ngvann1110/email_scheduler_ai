@@ -111,6 +111,7 @@ def _parse_message(service, msg_id: str) -> dict | None:
             "body":             body.strip(),
             "timestamp":        _parse_date_header(mail),
             "gmail_message_id": msg_id,
+            "thread_id":        msg.get("threadId"),
         }
     except Exception as e:
         logger.error("[Poller] Không parse được email %s: %s", msg_id, e)
@@ -197,7 +198,10 @@ async def poll_gmail():
                     # HITL contract: emails that produced a pending_action stay
                     # unread in Gmail until the user confirms via the Dashboard.
                     # Only informational flows (no pending_action) are marked read now.
-                    _HITL_FLOWS = {"schedule_flow", "reschedule_flow", "unclear_flow"}
+                    _HITL_FLOWS = {
+                        "schedule_flow", "reschedule_flow", "unclear_flow",
+                        "cancel_flow", "reply_required_flow",
+                    }
                     if final_result.get("type") not in _HITL_FLOWS:
                         _mark_as_read(service, msg_id)
 
