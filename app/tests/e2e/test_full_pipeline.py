@@ -1,14 +1,12 @@
 """
 End-to-end tests for the full email processing pipeline.
 
-These tests verify the complete flow:
-1. Email is received via webhook
-2. Email is processed by email_agent (intent parsing)
-3. Calendar event is created/rescheduled
-4. Notification is sent back to the sender
+These tests verify the complete flow with mocked external APIs (OpenAI, Google
+Calendar). The orchestrator follows a HITL contract — no events are created and
+no emails are sent; instead, a pending_action row is stored for user review.
 
-All external APIs are mocked. These tests verify the integration
-between all components working together.
+All external APIs and the DB layer are mocked. These tests verify the integration
+between all pipeline components working together.
 
 Prerequisites:
     pip install pytest pytest-asyncio httpx
@@ -18,7 +16,7 @@ Run with:
 """
 
 import json
-from unittest.mock import patch, MagicMock, AsyncMock
+from unittest.mock import patch, MagicMock
 
 import pytest
 
@@ -45,15 +43,18 @@ class MockChatCompletion:
 
 
 class TestFullSchedulePipeline:
-    """End-to-end test: email → schedule → notification."""
+    """End-to-end test: email → calendar check → pending action."""
 
     @patch("app.agents.email_agent.client")
     @patch("app.agents.calendar_agent._get_service")
-    @patch("app.agents.notification_agent._get_gmail_service")
+    @patch("app.orchestrator.orchestrator.priority_scoring_skill")
+    @patch("app.orchestrator.orchestrator.insert_email_insight")
+    @patch("app.orchestrator.orchestrator.create_pending_action")
     @pytest.mark.asyncio
-    async def test_full_schedule_flow(self, mock_noti_service, mock_cal_service, mock_email_client):
-        """Complete schedule flow should create event and send notification."""
-        # Setup mocks
+    async def test_full_schedule_flow(
+        self, mock_action, mock_insight, mock_score, mock_cal_service, mock_email_client
+    ):
+        """Complete schedule flow checks availability and creates a pending action."""
         mock_email_client.chat.completions.create.return_value = MockChatCompletion(
             json.dumps({
                 "intent": "schedule",
@@ -66,29 +67,15 @@ class TestFullSchedulePipeline:
             })
         )
 
-        # _get_service() returns mock_cal_service, so the actual service object
-        # is mock_cal_service.return_value
         svc = mock_cal_service.return_value
-
-        # Mock calendar service - no conflict
         svc.freebusy.return_value.query.return_value.execute.return_value = {
             "calendars": {"primary": {"busy": []}}
         }
 
-        mock_insert = MagicMock()
-        mock_insert.execute.return_value = {
-            "id": "evt_e2e_001",
-            "htmlLink": "https://calendar.google.com/event?eid=evt_e2e_001",
-            "summary": "Project meeting",
-        }
-        svc.events.return_value.insert.return_value = mock_insert
+        mock_insight.return_value = 1
+        mock_score.return_value = 50
+        mock_action.return_value = 42
 
-        # Mock notification service
-        mock_send = MagicMock()
-        mock_send.execute.return_value = {"id": "msg_e2e_001"}
-        mock_noti_service.users.return_value.messages.return_value.send.return_value = mock_send
-
-        # Execute pipeline
         from app.orchestrator.orchestrator import run_pipeline
         from app.schemas.email import EmailSchema
 
@@ -101,18 +88,21 @@ class TestFullSchedulePipeline:
 
         result = await run_pipeline(email)
 
-        # Verify
         assert result["type"] == "schedule_flow"
         assert result["data"]["email"]["intent"] == "schedule"
-        assert result["data"]["calendar"]["status"] == "created"
-        assert result["data"]["notification"]["status"] == "sent"
+        assert result["data"]["calendar"]["status"] == "free"
+        assert result["data"]["action_id"] == 42
 
     @patch("app.agents.email_agent.client")
     @patch("app.agents.calendar_agent._get_service")
-    @patch("app.agents.notification_agent._get_gmail_service")
+    @patch("app.orchestrator.orchestrator.priority_scoring_skill")
+    @patch("app.orchestrator.orchestrator.insert_email_insight")
+    @patch("app.orchestrator.orchestrator.create_pending_action")
     @pytest.mark.asyncio
-    async def test_full_schedule_with_conflict(self, mock_noti_service, mock_cal_service, mock_email_client):
-        """Schedule flow with conflict should find alternatives and notify."""
+    async def test_full_schedule_with_conflict(
+        self, mock_action, mock_insight, mock_score, mock_cal_service, mock_email_client
+    ):
+        """Schedule flow with conflict stores a pending action with conflict calendar data."""
         mock_email_client.chat.completions.create.return_value = MockChatCompletion(
             json.dumps({
                 "intent": "schedule",
@@ -126,8 +116,6 @@ class TestFullSchedulePipeline:
         )
 
         svc = mock_cal_service.return_value
-
-        # Mock calendar - conflict
         svc.freebusy.return_value.query.return_value.execute.return_value = {
             "calendars": {
                 "primary": {
@@ -136,10 +124,9 @@ class TestFullSchedulePipeline:
             }
         }
 
-        # Mock notification
-        mock_send = MagicMock()
-        mock_send.execute.return_value = {"id": "msg_e2e_002"}
-        mock_noti_service.users.return_value.messages.return_value.send.return_value = mock_send
+        mock_insight.return_value = 1
+        mock_score.return_value = 50
+        mock_action.return_value = 42
 
         from app.orchestrator.orchestrator import run_pipeline
         from app.schemas.email import EmailSchema
@@ -155,7 +142,7 @@ class TestFullSchedulePipeline:
 
         assert result["type"] == "schedule_flow"
         assert result["data"]["calendar"]["status"] == "conflict"
-        assert result["data"]["notification"]["status"] == "sent"
+        assert result["data"]["action_id"] == 42
 
 
 class TestFullPipelineWithEvaluation:
@@ -163,9 +150,13 @@ class TestFullPipelineWithEvaluation:
 
     @patch("app.agents.email_agent.client")
     @patch("app.agents.calendar_agent._get_service")
-    @patch("app.agents.notification_agent._get_gmail_service")
-    async def test_pipeline_with_retry(self, mock_noti_service, mock_cal_service, mock_email_client):
-        """Pipeline should retry on failure and eventually succeed."""
+    @patch("app.orchestrator.orchestrator.priority_scoring_skill")
+    @patch("app.orchestrator.orchestrator.insert_email_insight")
+    @patch("app.orchestrator.orchestrator.create_pending_action")
+    async def test_pipeline_with_retry(
+        self, mock_action, mock_insight, mock_score, mock_cal_service, mock_email_client
+    ):
+        """Pipeline should retry on unacceptable evaluation and return the accepted result."""
         mock_email_client.chat.completions.create.return_value = MockChatCompletion(
             json.dumps({
                 "intent": "schedule",
@@ -179,27 +170,13 @@ class TestFullPipelineWithEvaluation:
         )
 
         svc = mock_cal_service.return_value
-
         svc.freebusy.return_value.query.return_value.execute.return_value = {
             "calendars": {"primary": {"busy": []}}
         }
 
-        # Calendar fails first time, succeeds second time
-        call_count = [0]
-
-        def mock_execute(*args, **kwargs):
-            call_count[0] += 1
-            if call_count[0] == 1:
-                raise Exception("Temporary API error")
-            return {"id": "evt_retry_001", "htmlLink": "http://link"}
-
-        mock_insert = MagicMock()
-        mock_insert.execute.side_effect = mock_execute
-        svc.events.return_value.insert.return_value = mock_insert
-
-        mock_send = MagicMock()
-        mock_send.execute.return_value = {"id": "msg_e2e_004"}
-        mock_noti_service.users.return_value.messages.return_value.send.return_value = mock_send
+        mock_insight.return_value = 1
+        mock_score.return_value = 50
+        mock_action.return_value = 42
 
         from app.agents.evaluation_agent import evaluate_and_retry
         from app.orchestrator.orchestrator import run_pipeline
@@ -212,14 +189,12 @@ class TestFullPipelineWithEvaluation:
             timestamp="2026-06-06T10:00:00+07:00",
         )
 
-        # Lần 1: calendar lỗi → evaluate trả False → retry
-        # Lần 2: calendar thành công → evaluate trả True → done
         eval_call_count = [0]
 
         def mock_evaluate(r):
             eval_call_count[0] += 1
             if eval_call_count[0] == 1:
-                return {"acceptable": False, "reason": "calendar error, retrying"}
+                return {"acceptable": False, "reason": "low confidence, retrying"}
             return {"acceptable": True, "reason": "ok"}
 
         with patch("app.agents.evaluation_agent.asyncio.sleep"), \
@@ -227,4 +202,5 @@ class TestFullPipelineWithEvaluation:
             result = await evaluate_and_retry(run_pipeline, email)
 
         assert result["type"] == "schedule_flow"
-        assert result["data"]["calendar"]["status"] == "created"
+        assert result["data"]["calendar"]["status"] == "free"
+        assert result["data"]["action_id"] == 42

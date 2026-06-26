@@ -304,19 +304,20 @@ class TestPollGmail:
     async def test_poll_gmail_processes_messages(self, mock_gmail_service):
         """Should process new messages and run pipeline."""
         with patch("app.core.gmail_poller.get_gmail_service", return_value=mock_gmail_service):
-            with patch("app.core.gmail_poller.is_spam", return_value=(False, "")):
-                with patch("app.core.gmail_poller.evaluate_and_retry") as mock_eval:
-                    mock_eval.return_value = {
-                        "type": "inquiry_flow", "data": {}}
+            with patch("app.core.gmail_poller.get_pending_action_by_message_id", return_value=None):
+                with patch("app.core.gmail_poller.is_spam", return_value=(False, "")):
+                    with patch("app.core.gmail_poller.evaluate_and_retry") as mock_eval:
+                        mock_eval.return_value = {
+                            "type": "other_flow", "data": {}}
 
-                    # Run one iteration (will hit asyncio.sleep and stop)
-                    with patch("app.core.gmail_poller.asyncio.sleep", side_effect=asyncio.CancelledError):
-                        with pytest.raises(asyncio.CancelledError):
-                            from app.core.gmail_poller import poll_gmail
-                            await poll_gmail()
+                        # Run one iteration (will hit asyncio.sleep and stop)
+                        with patch("app.core.gmail_poller.asyncio.sleep", side_effect=asyncio.CancelledError):
+                            with pytest.raises(asyncio.CancelledError):
+                                from app.core.gmail_poller import poll_gmail
+                                await poll_gmail()
 
-                    # Should have called evaluate_and_retry for each message
-                    assert mock_eval.call_count >= 1
+                        # Should have called evaluate_and_retry for each message
+                        assert mock_eval.call_count >= 1
 
     @pytest.mark.asyncio
     async def test_poll_gmail_skips_spam(self, mock_gmail_service):
@@ -374,20 +375,21 @@ class TestPollGmail:
 
         async def fake_pipeline(*args, **kwargs):
             call_order.append("pipeline")
-            return {"type": "schedule_flow", "data": {}}
+            return {"type": "other_flow", "data": {}}
 
         def fake_mark_read(service, msg_id):
             call_order.append("mark_read")
 
         with patch("app.core.gmail_poller.get_gmail_service", return_value=mock_gmail_service):
-            with patch("app.core.gmail_poller.is_spam", return_value=(False, "")):
-                with patch("app.core.gmail_poller.evaluate_and_retry", new=fake_pipeline):
-                    with patch("app.core.gmail_poller._mark_as_read",
-                               side_effect=fake_mark_read):
-                        with patch("app.core.gmail_poller.asyncio.sleep",
-                                   side_effect=asyncio.CancelledError):
-                            with pytest.raises(asyncio.CancelledError):
-                                await poll_gmail()
+            with patch("app.core.gmail_poller.get_pending_action_by_message_id", return_value=None):
+                with patch("app.core.gmail_poller.is_spam", return_value=(False, "")):
+                    with patch("app.core.gmail_poller.evaluate_and_retry", new=fake_pipeline):
+                        with patch("app.core.gmail_poller._mark_as_read",
+                                   side_effect=fake_mark_read):
+                            with patch("app.core.gmail_poller.asyncio.sleep",
+                                       side_effect=asyncio.CancelledError):
+                                with pytest.raises(asyncio.CancelledError):
+                                    await poll_gmail()
 
         assert "pipeline" in call_order, "_mark_as_read fired before pipeline ran"
         assert "mark_read" in call_order, "_mark_as_read was never called on success"
@@ -399,12 +401,13 @@ class TestPollGmail:
     async def test_marks_spam_as_read_without_running_pipeline(self, mock_gmail_service):
         """Spam emails must be marked as read (so they don't recur) but pipeline must not run."""
         with patch("app.core.gmail_poller.get_gmail_service", return_value=mock_gmail_service):
-            with patch("app.core.gmail_poller.is_spam", return_value=(True, "spam_keyword")):
-                with patch("app.core.gmail_poller.evaluate_and_retry") as mock_eval:
-                    with patch("app.core.gmail_poller._mark_as_read") as mock_mark:
-                        with patch("app.core.gmail_poller.asyncio.sleep",
-                                   side_effect=asyncio.CancelledError):
-                            with pytest.raises(asyncio.CancelledError):
-                                await poll_gmail()
+            with patch("app.core.gmail_poller.get_pending_action_by_message_id", return_value=None):
+                with patch("app.core.gmail_poller.is_spam", return_value=(True, "spam_keyword")):
+                    with patch("app.core.gmail_poller.evaluate_and_retry") as mock_eval:
+                        with patch("app.core.gmail_poller._mark_as_read") as mock_mark:
+                            with patch("app.core.gmail_poller.asyncio.sleep",
+                                       side_effect=asyncio.CancelledError):
+                                with pytest.raises(asyncio.CancelledError):
+                                    await poll_gmail()
         mock_mark.assert_called()
         mock_eval.assert_not_called()

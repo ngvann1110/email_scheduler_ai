@@ -2,9 +2,9 @@
 Unit tests for inquiry and other intent handling in the orchestrator.
 
 Tests:
-- test_inquiry_flow_sends_reply
-- test_other_flow_sends_fallback
-- test_inquiry_flow_notification_failure
+- test_inquiry_flow_sends_reply    — inquiry → reply_required_flow + pending action
+- test_other_flow_sends_fallback   — other → classify_intelligence → other_flow
+- test_inquiry_flow_notification_failure — insight storage failure is handled gracefully
 """
 
 from unittest.mock import MagicMock, patch
@@ -15,22 +15,24 @@ from app.orchestrator.orchestrator import run_pipeline
 
 
 class TestInquiryHandler:
-    """Tests for inquiry/other intent auto-reply functionality."""
+    """Tests for inquiry/other intent routing in the LangGraph orchestrator."""
 
     @patch("app.orchestrator.orchestrator.process_email")
-    @patch("app.orchestrator.orchestrator.chat")
-    @patch("app.orchestrator.orchestrator.send_reply")
+    @patch("app.orchestrator.orchestrator.priority_scoring_skill")
+    @patch("app.orchestrator.orchestrator.insert_email_insight")
+    @patch("app.orchestrator.orchestrator.create_pending_action")
     @patch("app.orchestrator.orchestrator.log_event")
     @pytest.mark.asyncio
-    async def test_inquiry_flow_sends_reply(self, mock_log, mock_send_reply, mock_chat, mock_email):
-        """Inquiry flow should call chat_agent and send a reply to the sender."""
-        mock_email.return_value = {"intent": "inquiry"}
-        mock_chat.return_value = {
-            "reply": "Chào bạn, hiện tại lịch của tôi còn trống vào thứ Ba tuần sau.",
-            "action": None,
+    async def test_inquiry_flow_sends_reply(self, mock_log, mock_action, mock_insight, mock_score, mock_email):
+        """inquiry intent creates a reply_required pending action and returns reply_required_flow."""
+        mock_email.return_value = {
+            "intent": "inquiry",
+            "confidence": 0.9,
+            "summary": "Asking about schedule availability",
         }
-        mock_send_reply.return_value = {
-            "status": "sent", "to": "sender@example.com"}
+        mock_insight.return_value = 1
+        mock_score.return_value = 30
+        mock_action.return_value = 10
 
         email_obj = MagicMock()
         email_obj.sender = "sender@example.com"
@@ -39,67 +41,65 @@ class TestInquiryHandler:
 
         result = await run_pipeline(email_obj)
 
-        assert result["type"] == "inquiry_flow"
-        assert "reply" in result["data"]
-        assert len(result["data"]["reply"]) > 0
-        assert result["data"]["notification"]["status"] == "sent"
-        # Verify notification was called with the sender's email
-        mock_send_reply.assert_called_once()
-        args, kwargs = mock_send_reply.call_args
-        assert kwargs["to_email"] == "sender@example.com" or args[0] is not None
+        assert result["type"] == "reply_required_flow"
+        assert result["data"]["email"]["intent"] == "inquiry"
+        assert result["data"]["action_id"] == 10
+        mock_action.assert_called_once()
 
     @patch("app.orchestrator.orchestrator.process_email")
-    @patch("app.orchestrator.orchestrator.send_reply")
+    @patch("app.orchestrator.orchestrator.classify_intelligence")
+    @patch("app.orchestrator.orchestrator.priority_scoring_skill")
+    @patch("app.orchestrator.orchestrator.insert_email_insight")
+    @patch("app.orchestrator.orchestrator.insert_email_analysis")
     @patch("app.orchestrator.orchestrator.log_event")
     @pytest.mark.asyncio
-    async def test_other_flow_sends_fallback(self, mock_log, mock_send_reply, mock_email):
-        """Other flow should send fixed fallback email, NOT call chat_agent."""
-        mock_email.return_value = {"intent": "other"}
-        mock_send_reply.return_value = {
-            "status": "sent", "to": "unknown@example.com"}
+    async def test_other_flow_sends_fallback(
+        self, mock_log, mock_insert, mock_insight, mock_score, mock_intel, mock_email
+    ):
+        """other intent calls classify_intelligence and returns other_flow; no reply sent."""
+        mock_email.return_value = {"intent": "other", "confidence": 0.9}
+        mock_intel.return_value = {
+            "category": "general",
+            "importance_score": 40,
+            "summary": "- General inquiry",
+            "extracted_data": {},
+        }
+        mock_insight.return_value = 1
+        mock_score.return_value = 30
 
         email_obj = MagicMock()
         email_obj.sender = "unknown@example.com"
         email_obj.body = "Blah blah blah"
         email_obj.subject = "Random topic"
 
-        with patch("app.orchestrator.orchestrator.chat") as mock_chat:
-            result = await run_pipeline(email_obj)
+        result = await run_pipeline(email_obj)
 
         assert result["type"] == "other_flow"
-        assert result["data"]["notification"]["status"] == "sent"
-        # chat_agent MUST NOT be called (no token waste)
-        mock_chat.assert_not_called()
-        # notification must be called
-        mock_send_reply.assert_called_once()
+        assert result["data"]["intelligence"]["category"] == "general"
+        mock_intel.assert_called_once_with(email_obj)
 
     @patch("app.orchestrator.orchestrator.process_email")
-    @patch("app.orchestrator.orchestrator.chat")
-    @patch("app.orchestrator.orchestrator.send_reply")
+    @patch("app.orchestrator.orchestrator.priority_scoring_skill")
+    @patch("app.orchestrator.orchestrator.insert_email_insight")
+    @patch("app.orchestrator.orchestrator.create_pending_action")
     @patch("app.orchestrator.orchestrator.log_event")
     @pytest.mark.asyncio
     async def test_inquiry_flow_notification_failure(
-        self, mock_log, mock_send_reply, mock_chat, mock_email
+        self, mock_log, mock_action, mock_insight, mock_score, mock_email
     ):
-        """Pipeline should not crash when notification fails, should return error status."""
-        mock_email.return_value = {"intent": "inquiry"}
-        mock_chat.return_value = {
-            "reply": "Đây là câu trả lời.",
-            "action": None,
-        }
-        mock_send_reply.side_effect = Exception("SMTP connection failed")
+        """inquiry flow succeeds even when email insight storage raises (handled internally)."""
+        mock_email.return_value = {"intent": "inquiry", "confidence": 0.9}
+        mock_insight.side_effect = Exception("DB failure")
+        mock_score.return_value = 30
+        mock_action.return_value = 10
 
         email_obj = MagicMock()
         email_obj.sender = "sender@example.com"
         email_obj.body = "Hỏi về lịch"
         email_obj.subject = "Inquiry"
 
-        # The orchestrator wraps the inquiry block in try/except,
-        # so even if send_reply raises, the pipeline should return gracefully
         result = await run_pipeline(email_obj)
 
-        assert result["type"] == "inquiry_flow"
-        assert result["data"]["notification"]["status"] == "error"
-        assert "message" in result["data"]["notification"]
-        # Should still have the email result
+        assert result["type"] == "reply_required_flow"
         assert result["data"]["email"]["intent"] == "inquiry"
+        assert result["data"]["action_id"] == 10

@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"from app.api.v1.dashboard import router; print\\('dashboard.py OK'\\)\")",
+      "PowerShell(Get-Command py -ErrorAction SilentlyContinue)",
+      "PowerShell(Get-Command uvicorn -ErrorAction SilentlyContinue)",
+      "PowerShell($env:PATH = \"C:\\\\Users\\\\admin\\\\miniconda3\\\\envs\\\\datn;C:\\\\Users\\\\admin\\\\miniconda3\\\\envs\\\\datn\\\\Scripts;$env:PATH\"; cd \"c:\\\\Users\\\\admin\\\\Documents\\\\ĐATN\\\\datn_source\\\\email_scheduler_ai\"; python -c \"from app.api.v1.dashboard import router; print\\('dashboard.py OK'\\)\" 2>&1)",
+      "PowerShell($env:PATH = \"C:\\\\Users\\\\admin\\\\miniconda3\\\\envs\\\\datn;C:\\\\Users\\\\admin\\\\miniconda3\\\\envs\\\\datn\\\\Scripts;$env:PATH\"; cd \"c:\\\\Users\\\\admin\\\\Documents\\\\ĐATN\\\\datn_source\\\\email_scheduler_ai\"; python -c \"from app.orchestrator.orchestrator import run_pipeline; print\\('orchestrator.py OK'\\)\" 2>&1)",
+      "Bash(C:\\\\Users\\\\admin\\\\miniconda3\\\\envs\\\\datn\\\\python.exe -c \"import ast, sys; files=['app/agents/email_agent.py','app/orchestrator/orchestrator.py','app/db/sqlite.py','app/api/v1/dashboard.py']; [print\\(f+'  OK'\\) or ast.parse\\(open\\(f,encoding='utf-8'\\).read\\(\\)\\) for f in files]; print\\('All OK'\\)\")",
+      "PowerShell(cd \"c:\\\\Users\\\\admin\\\\Documents\\\\ĐATN\\\\datn_source\\\\email_scheduler_ai\"; $files = @\\('app/agents/email_agent.py','app/orchestrator/orchestrator.py','app/db/sqlite.py','app/api/v1/dashboard.py'\\); foreach \\($f in $files\\) { $result = & \"C:\\\\Users\\\\admin\\\\miniconda3\\\\envs\\\\datn\\\\python.exe\" -c \"import ast; ast.parse\\(open\\('$f',encoding='utf-8'\\).read\\(\\)\\); print\\('$f OK'\\)\" 2>&1; Write-Host $result })",
+      "PowerShell(cd \"c:\\\\Users\\\\admin\\\\Documents\\\\ĐATN\\\\datn_source\\\\email_scheduler_ai\"; $files = @\\('app/schemas/email.py','app/core/gmail_poller.py','app/db/sqlite.py','app/orchestrator/orchestrator.py','app/api/v1/dashboard.py'\\); foreach \\($f in $files\\) { $r = & \"C:\\\\Users\\\\admin\\\\miniconda3\\\\envs\\\\datn\\\\python.exe\" -c \"import ast; ast.parse\\(open\\('$f',encoding='utf-8'\\).read\\(\\)\\); print\\('OK: $f'\\)\" 2>&1; Write-Host $r })",
+      "Bash(python -m pytest app/tests/ -v --tb=short)"
+    ]
+  }
+}
